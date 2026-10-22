@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens. Cool-tinted neutrals (hue 265) plus one teal accent (hue 170) that marks only what can be acted on. */
+:root {
+  --bg: oklch(0.982 0.004 265);
+  --surface: oklch(1 0 0);
+  --sunken: oklch(0.962 0.006 265);
+  --line: oklch(0.915 0.007 265);
+  --line-strong: oklch(0.85 0.01 265);
+  --ink: oklch(0.22 0.02 265);
+  --muted: oklch(0.47 0.02 265);
+  --accent: oklch(0.5 0.12 172);
+  --accent-ink: oklch(0.99 0.01 172);
+  --accent-soft: oklch(0.945 0.04 172);
+  --amber-soft: oklch(0.955 0.06 85);
+  --amber-ink: oklch(0.4 0.09 65);
+  --red-soft: oklch(0.955 0.03 25);
+  --red-ink: oklch(0.44 0.15 25);
+  --violet-soft: oklch(0.95 0.03 295);
+  --violet-ink: oklch(0.42 0.12 295);
+  --shadow: 0 1px 2px oklch(0.2 0.02 265 / 0.06), 0 4px 16px oklch(0.2 0.02 265 / 0.05);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: oklch(0.165 0.012 265);
+    --surface: oklch(0.2 0.014 265);
+    --sunken: oklch(0.145 0.012 265);
+    --line: oklch(0.27 0.014 265);
+    --line-strong: oklch(0.34 0.016 265);
+    --ink: oklch(0.95 0.005 265);
+    --muted: oklch(0.72 0.015 265);
+    --accent: oklch(0.78 0.13 172);
+    --accent-ink: oklch(0.2 0.04 172);
+    --accent-soft: oklch(0.28 0.05 172);
+    --amber-soft: oklch(0.3 0.06 80);
+    --amber-ink: oklch(0.88 0.09 85);
+    --red-soft: oklch(0.3 0.07 25);
+    --red-ink: oklch(0.86 0.08 25);
+    --violet-soft: oklch(0.3 0.06 295);
+    --violet-ink: oklch(0.86 0.08 295);
+    --shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 4px 16px oklch(0 0 0 / 0.3);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: oklch(0.165 0.012 265);
+  --surface: oklch(0.2 0.014 265);
+  --sunken: oklch(0.145 0.012 265);
+  --line: oklch(0.27 0.014 265);
+  --line-strong: oklch(0.34 0.016 265);
+  --ink: oklch(0.95 0.005 265);
+  --muted: oklch(0.72 0.015 265);
+  --accent: oklch(0.78 0.13 172);
+  --accent-ink: oklch(0.2 0.04 172);
+  --accent-soft: oklch(0.28 0.05 172);
+  --amber-soft: oklch(0.3 0.06 80);
+  --amber-ink: oklch(0.88 0.09 85);
+  --red-soft: oklch(0.3 0.07 25);
+  --red-ink: oklch(0.86 0.08 25);
+  --violet-soft: oklch(0.3 0.06 295);
+  --violet-ink: oklch(0.86 0.08 295);
+  --shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 4px 16px oklch(0 0 0 / 0.3);
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-bg text-ink antialiased;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+  h1, h2, h3 { text-wrap: balance; letter-spacing: -0.012em; }
+  ::selection { background: var(--accent-soft); color: var(--ink); }
+  input, textarea, select { caret-color: var(--accent); }
+  * { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3.5 text-sm font-medium text-ink select-none;
+    transition: background-color 140ms var(--ease-out), border-color 140ms var(--ease-out), transform 160ms var(--ease-out), opacity 140ms;
+  }
+  .btn:active:not(:disabled) { transform: scale(0.97); }
+  .btn:disabled { @apply cursor-not-allowed opacity-50; }
+  .btn-primary { @apply border-transparent bg-accent text-accent-ink; }
+  .btn-ghost { @apply border-transparent bg-transparent; }
+  .btn-icon { @apply w-9 px-0; }
+  @media (hover: hover) and (pointer: fine) {
+    .btn:hover:not(:disabled) { background-color: var(--sunken); }
+    .btn-primary:hover:not(:disabled) { background-color: color-mix(in oklch, var(--accent) 88%, var(--ink)); }
+  }
+  @media (pointer: coarse) {
+    .btn { min-height: 2.75rem; }
+    .btn-icon { min-width: 2.75rem; }
+  }
+
+  .field-label { @apply mb-1 block text-xs font-medium text-muted; }
+  .input {
+    @apply h-9 w-full rounded-lg border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-muted;
+    transition: border-color 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
+  }
+  textarea.input { @apply h-auto py-2; }
+  .input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  @media (pointer: coarse) { .input { min-height: 2.75rem; } }
+
+  .chip { @apply inline-flex items-center gap-1 rounded-md bg-sunken px-1.5 py-0.5 text-xs font-medium text-muted; }
+  .chip-accent { background: var(--accent-soft); color: var(--accent); }
+  .chip-amber { background: var(--amber-soft); color: var(--amber-ink); }
+  .chip-red { background: var(--red-soft); color: var(--red-ink); }
+  .chip-violet { background: var(--violet-soft); color: var(--violet-ink); }
+
+  .seg { @apply inline-flex rounded-lg bg-sunken p-0.5; }
+  .seg > button {
+    @apply h-8 rounded-md px-3 text-sm font-medium text-muted;
+    transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out), transform 160ms var(--ease-out);
+  }
+  .seg > button:active { transform: scale(0.97); }
+  .seg > button[aria-pressed="true"], .seg > button[aria-selected="true"], .seg > button[aria-current="page"] {
+    background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px oklch(0.2 0.02 265 / 0.12);
+  }
+  @media (pointer: coarse) { .seg > button { min-height: 2.5rem; } }
+
+  .job-row { transition: background-color 140ms var(--ease-out); }
+  @media (hover: hover) and (pointer: fine) { .job-row:hover:not([aria-current]) { background-color: var(--sunken); } }
+
+  .pane-in { animation: pane-in 200ms var(--ease-out) both; }
+  .spinner {
+    @apply inline-block h-4 w-4 rounded-full border-2 border-current border-t-transparent;
+    animation: spin 700ms linear infinite;
+  }
+  .skeleton { @apply rounded-md bg-sunken; animation: pulse 1.4s ease-in-out infinite; }
+
+  .diff-add { background: var(--accent-soft); }
+  .diff-del { background: var(--red-soft); }
+}
+
+@keyframes pane-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 50% { opacity: 0.55; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pane-in { animation: fade-in 150ms ease both; }
+  .btn:active:not(:disabled), .seg > button:active { transform: none; }
+  .skeleton { animation: none; }
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }

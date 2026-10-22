@@ -1,0 +1,357 @@
+"use client";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+
+export type Lang = "de" | "en";
+
+const de = {
+  appName: "Resume Analyzer",
+  navJobs: "Stellen",
+  navSearches: "Suchprofile",
+  navCv: "Mein CV",
+  navManual: "Manuell",
+  language: "Sprache",
+  themeSystem: "Design: System",
+  themeLight: "Design: Hell",
+  themeDark: "Design: Dunkel",
+
+  statusAll: "Alle aktiven",
+  statusNeu: "Neu",
+  statusAngesehen: "Angesehen",
+  statusBeworben: "Beworben",
+  statusIgnoriert: "Ignoriert",
+  filterSearch: "Stellen durchsuchen",
+  filterSearchPlaceholder: "Titel, Firma, Ort",
+  filterStatus: "Status",
+  filterProfile: "Suchprofil",
+  allProfiles: "Alle Suchprofile",
+  jobCount: "{n} Stellen",
+  jobCountOne: "1 Stelle",
+  runSearch: "Suche ausführen",
+  searching: "Suche läuft…",
+  searchDone: "{added} neue Stellen ({total} gefunden).",
+  needProfile: "Lege zuerst ein Suchprofil an.",
+  jobsListLabel: "Gefundene Stellen",
+  matchTitle: "Übereinstimmung des Titels mit deinem CV",
+  badgeNew: "neu",
+  badgeCv: "CV angepasst",
+  badgeApplied: "beworben",
+
+  emptyJobsTitle: "Noch keine Stellen",
+  emptyJobsBody: "Lege ein Suchprofil an und starte die Suche. Oder füge eine einzelne Stelle manuell hinzu.",
+  emptyNoProfile: "Suchprofil anlegen",
+  emptyManual: "Stelle manuell hinzufügen",
+  emptyFiltered: "Keine Stellen für diese Filter.",
+  selectJob: "Wähle links eine Stelle aus.",
+  noCvTitle: "Noch kein CV gespeichert",
+  noCvBody: "Speichere zuerst deinen LaTeX-Lebenslauf, damit er an Stellen angepasst werden kann.",
+  noCvAction: "Zu „Mein CV“",
+
+  back: "Zurück zur Liste",
+  paneDetails: "Details",
+  panePdf: "PDF",
+  tailor: "CV anpassen",
+  tailorAgain: "Neu generieren",
+  tailoring: "Passe an…",
+  tailoringHint: "Gemini schreibt den CV um und LaTeX kompiliert ihn. Das dauert etwa 20–60 Sekunden.",
+  markApplied: "Als beworben markieren",
+  markIgnored: "Ignorieren",
+  restore: "Wiederherstellen",
+  openLinkedIn: "Auf LinkedIn öffnen",
+  optAggressive: "Offensiv umschreiben",
+  optAggressiveHint: "Ergänzt Skills und Aufgaben aus der Anzeige.",
+  optLanguage: "Sprache der Anzeige übernehmen",
+  tabDescription: "Beschreibung",
+  tabChanges: "Änderungen",
+  tabDiff: "Diff",
+  loadingDescription: "Lade Beschreibung…",
+  noTailored: "Noch kein angepasster CV.",
+  noTailoredHint: "Klicke auf „CV anpassen“, um ihn für diese Stelle zu erzeugen.",
+  keywordsUsed: "Übernommene Keywords",
+  changesNote: "Gelb markiert ist neu und stand nicht im Original-CV. Prüfe das vor dem Absenden, im Interview wirst du danach gefragt.",
+  changeAdded: "Neu",
+  changeRewritten: "Umformuliert",
+  changeReordered: "Umsortiert",
+
+  pdfTailored: "Angepasst",
+  pdfOriginal: "Original",
+  pdfPreview: "CV-Vorschau",
+  pdfDownload: "PDF herunterladen",
+  texDownload: ".tex herunterladen",
+  pdfCompiling: "Kompiliere PDF…",
+  pdfNone: "Noch kein angepasster CV. Klicke auf „CV anpassen“.",
+
+  searchesNew: "Neues Suchprofil",
+  searchesEdit: "Suchprofil bearbeiten",
+  searchesSaved: "Gespeicherte Suchen",
+  searchesNone: "Noch keine Suchprofile.",
+  fName: "Name (optional)",
+  fKeywords: "Suchbegriff",
+  fKeywordsPh: "z. B. Werkstudent Softwareentwicklung",
+  fLocation: "Standort",
+  fLocationPh: "z. B. Berlin, Deutschland",
+  fRadius: "Umkreis (km)",
+  fPosted: "Veröffentlicht",
+  posted24h: "Letzte 24 Stunden",
+  postedWeek: "Letzte Woche",
+  postedMonth: "Letzter Monat",
+  postedAny: "Beliebig",
+  fWorkplace: "Arbeitsmodell",
+  wpOnsite: "Vor Ort",
+  wpHybrid: "Hybrid",
+  wpRemote: "Remote",
+  fExperience: "Erfahrungsstufe",
+  expInternship: "Praktikum",
+  expEntry: "Einstieg",
+  expAssociate: "Berufserfahrung",
+  expMidSenior: "Erfahren",
+  expDirector: "Leitung",
+  expExecutive: "Executive",
+  fExclude: "Titel ausschließen",
+  fExcludePh: "Senior, Lead",
+  fExcludeHint: "Kommagetrennt.",
+  fMax: "Max. Treffer",
+  save: "Speichern",
+  cancel: "Abbrechen",
+  edit: "Bearbeiten",
+  delete: "Löschen",
+  everywhere: "überall",
+
+  cvUpload: ".tex hochladen",
+  cvSave: "Speichern",
+  cvSaved: "Gespeichert.",
+  cvEditor: "LaTeX-Quelltext",
+  cvPlaceholder: "Füge hier den LaTeX-Quelltext deines Lebenslaufs ein (mit \\begin{document}).",
+  cvOriginalPdf: "Original-PDF",
+
+  manualTitle: "Stelle manuell hinzufügen",
+  manualBody: "Füge eine LinkedIn-URL ein, sie wird automatisch geladen. Blockt LinkedIn, gib stattdessen die Stellenbeschreibung als Text ein.",
+  mUrl: "LinkedIn-Job-URL",
+  mTitle: "Titel (bei Text)",
+  mCompany: "Firma (bei Text)",
+  mText: "Stellenbeschreibung",
+  mSubmit: "Hinzufügen & CV anpassen",
+
+  tabFit: "Fit",
+  fitAnalyze: "Fit analysieren",
+  fitAnalyzing: "Analysiere…",
+  fitAgain: "Neu analysieren",
+  fitEmptyTitle: "Noch keine Fit-Analyse",
+  fitEmptyBody: "Gemini vergleicht deinen CV mit der Stelle und nennt Pro und Contra. Das dauert etwa 10 Sekunden.",
+  fitPros: "Pro",
+  fitCons: "Contra",
+  sevDealbreaker: "Muss-Kriterium",
+  sevGap: "Lücke",
+  sevMinor: "Gering",
+  fitAiScore: "Fit laut Analyse",
+  relToday: "heute",
+  linkedinBlocked: "LinkedIn blockt gerade. Versuche es später erneut.",
+} as const;
+
+export type Key = keyof typeof de;
+
+const en: Record<Key, string> = {
+  appName: "Resume Analyzer",
+  navJobs: "Jobs",
+  navSearches: "Searches",
+  navCv: "My CV",
+  navManual: "Manual",
+  language: "Language",
+  themeSystem: "Theme: System",
+  themeLight: "Theme: Light",
+  themeDark: "Theme: Dark",
+
+  statusAll: "All active",
+  statusNeu: "New",
+  statusAngesehen: "Viewed",
+  statusBeworben: "Applied",
+  statusIgnoriert: "Ignored",
+  filterSearch: "Search jobs",
+  filterSearchPlaceholder: "Title, company, place",
+  filterStatus: "Status",
+  filterProfile: "Search profile",
+  allProfiles: "All search profiles",
+  jobCount: "{n} jobs",
+  jobCountOne: "1 job",
+  runSearch: "Run search",
+  searching: "Searching…",
+  searchDone: "{added} new jobs ({total} found).",
+  needProfile: "Create a search profile first.",
+  jobsListLabel: "Found jobs",
+  matchTitle: "How well the title matches your CV",
+  badgeNew: "new",
+  badgeCv: "CV tailored",
+  badgeApplied: "applied",
+
+  emptyJobsTitle: "No jobs yet",
+  emptyJobsBody: "Create a search profile and run the search, or add a single job manually.",
+  emptyNoProfile: "Create search profile",
+  emptyManual: "Add job manually",
+  emptyFiltered: "No jobs match these filters.",
+  selectJob: "Select a job on the left.",
+  noCvTitle: "No CV saved yet",
+  noCvBody: "Save your LaTeX résumé first so it can be tailored to jobs.",
+  noCvAction: "Go to “My CV”",
+
+  back: "Back to list",
+  paneDetails: "Details",
+  panePdf: "PDF",
+  tailor: "Tailor CV",
+  tailorAgain: "Regenerate",
+  tailoring: "Tailoring…",
+  tailoringHint: "Gemini rewrites the CV and LaTeX compiles it. This takes about 20–60 seconds.",
+  markApplied: "Mark as applied",
+  markIgnored: "Ignore",
+  restore: "Restore",
+  openLinkedIn: "Open on LinkedIn",
+  optAggressive: "Rewrite aggressively",
+  optAggressiveHint: "Adds skills and tasks from the posting.",
+  optLanguage: "Use the posting's language",
+  tabDescription: "Description",
+  tabChanges: "Changes",
+  tabDiff: "Diff",
+  loadingDescription: "Loading description…",
+  noTailored: "No tailored CV yet.",
+  noTailoredHint: "Click “Tailor CV” to generate one for this job.",
+  keywordsUsed: "Keywords used",
+  changesNote: "Highlighted in amber means new and not in your original CV. Check it before sending, you may be asked about it in the interview.",
+  changeAdded: "New",
+  changeRewritten: "Rewritten",
+  changeReordered: "Reordered",
+
+  pdfTailored: "Tailored",
+  pdfOriginal: "Original",
+  pdfPreview: "CV preview",
+  pdfDownload: "Download PDF",
+  texDownload: "Download .tex",
+  pdfCompiling: "Compiling PDF…",
+  pdfNone: "No tailored CV yet. Click “Tailor CV”.",
+
+  searchesNew: "New search profile",
+  searchesEdit: "Edit search profile",
+  searchesSaved: "Saved searches",
+  searchesNone: "No search profiles yet.",
+  fName: "Name (optional)",
+  fKeywords: "Keywords",
+  fKeywordsPh: "e.g. working student software development",
+  fLocation: "Location",
+  fLocationPh: "e.g. Berlin, Germany",
+  fRadius: "Radius (km)",
+  fPosted: "Posted",
+  posted24h: "Last 24 hours",
+  postedWeek: "Last week",
+  postedMonth: "Last month",
+  postedAny: "Any time",
+  fWorkplace: "Workplace",
+  wpOnsite: "On-site",
+  wpHybrid: "Hybrid",
+  wpRemote: "Remote",
+  fExperience: "Experience level",
+  expInternship: "Internship",
+  expEntry: "Entry level",
+  expAssociate: "Associate",
+  expMidSenior: "Mid-senior",
+  expDirector: "Director",
+  expExecutive: "Executive",
+  fExclude: "Exclude titles",
+  fExcludePh: "Senior, Lead",
+  fExcludeHint: "Comma-separated.",
+  fMax: "Max results",
+  save: "Save",
+  cancel: "Cancel",
+  edit: "Edit",
+  delete: "Delete",
+  everywhere: "anywhere",
+
+  cvUpload: "Upload .tex",
+  cvSave: "Save",
+  cvSaved: "Saved.",
+  cvEditor: "LaTeX source",
+  cvPlaceholder: "Paste the LaTeX source of your résumé here (including \\begin{document}).",
+  cvOriginalPdf: "Original PDF",
+
+  manualTitle: "Add a job manually",
+  manualBody: "Paste a LinkedIn URL and it loads automatically. If LinkedIn blocks it, enter the job description as text instead.",
+  mUrl: "LinkedIn job URL",
+  mTitle: "Title (for text)",
+  mCompany: "Company (for text)",
+  mText: "Job description",
+  mSubmit: "Add & tailor CV",
+
+  tabFit: "Fit",
+  fitAnalyze: "Analyze fit",
+  fitAnalyzing: "Analyzing…",
+  fitAgain: "Re-analyze",
+  fitEmptyTitle: "No fit analysis yet",
+  fitEmptyBody: "Gemini compares your CV with the job and lists pros and cons. Takes about 10 seconds.",
+  fitPros: "Pros",
+  fitCons: "Cons",
+  sevDealbreaker: "Must-have",
+  sevGap: "Gap",
+  sevMinor: "Minor",
+  fitAiScore: "Fit from analysis",
+  relToday: "today",
+  linkedinBlocked: "LinkedIn is blocking requests right now. Try again later.",
+};
+
+const dicts: Record<Lang, Record<Key, string>> = { de, en };
+
+interface I18n {
+  lang: Lang;
+  setLang: (l: Lang) => void;
+  t: (key: Key, vars?: Record<string, string | number>) => string;
+  date: (iso?: string) => string;
+}
+
+const Ctx = createContext<I18n | null>(null);
+
+export function I18nProvider({ children }: { children: React.ReactNode }) {
+  const [lang, setLangState] = useState<Lang>("de");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("lang");
+      if (saved === "de" || saved === "en") setLangState(saved);
+      else if (navigator.language.toLowerCase().startsWith("en")) setLangState("en");
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+
+  const setLang = useCallback((l: Lang) => {
+    setLangState(l);
+    try {
+      localStorage.setItem("lang", l);
+    } catch {}
+  }, []);
+
+  const value = useMemo<I18n>(
+    () => ({
+      lang,
+      setLang,
+      t: (key, vars) => {
+        let s = dicts[lang][key];
+        for (const [k, v] of Object.entries(vars ?? {})) s = s.replace(`{${k}}`, String(v));
+        return s;
+      },
+      date: (iso) => {
+        if (!iso) return "";
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return iso;
+        const days = Math.round((d.getTime() - Date.now()) / 86_400_000);
+        if (days === 0) return dicts[lang].relToday;
+        return new Intl.RelativeTimeFormat(lang, { numeric: "auto" }).format(days, "day");
+      },
+    }),
+    [lang, setLang],
+  );
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+export function useI18n() {
+  const v = useContext(Ctx);
+  if (!v) throw new Error("useI18n outside I18nProvider");
+  return v;
+}
