@@ -8,14 +8,22 @@ export default function PdfPanel({ job, version }: { job: Job; version: number }
   const { t } = useI18n();
   const [which, setWhich] = useState<"tailored" | "original">("tailored");
   const [loaded, setLoaded] = useState(false);
-  const base = `/api/jobs/${job.id}/pdf?which=${which}`;
-  const canShow = which === "original" || !!job.tailored;
+  const [doc, setDoc] = useState<"cv" | "cover">("cv");
+  const base = `/api/jobs/${job.id}/pdf?which=${which}&doc=${doc}`;
+  const canShow = which === "original" || !!(doc === "cv" ? job.tailored : job.cover);
 
-  useEffect(() => setLoaded(false), [job.id, which, version]);
+  useEffect(() => setLoaded(false), [job.id, which, doc, version]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-line p-3">
+        <div className="seg" role="group" aria-label={t("pdfPreview")}>
+          {(["cv", "cover"] as const).map((d) => (
+            <button key={d} aria-pressed={doc === d} onClick={() => setDoc(d)}>
+              {d === "cv" ? t("pdfCv") : t("pdfCover")}
+            </button>
+          ))}
+        </div>
         <div className="seg" role="group" aria-label={t("pdfPreview")}>
           {(["tailored", "original"] as const).map((w) => (
             <button key={w} aria-pressed={which === w} onClick={() => setWhich(w)}>
@@ -39,7 +47,7 @@ export default function PdfPanel({ job, version }: { job: Job; version: number }
               </div>
             )}
             <iframe
-              key={`${job.id}-${which}-${version}`}
+              key={`${job.id}-${doc}-${which}-${version}`}
               src={`${base}&format=pdf&v=${version}`}
               onLoad={() => setLoaded(true)}
               title={t("pdfPreview")}
@@ -47,7 +55,7 @@ export default function PdfPanel({ job, version }: { job: Job; version: number }
             />
           </>
         ) : (
-          <p className="p-4 text-sm text-muted">{t("pdfNone")}</p>
+          <p className="p-4 text-sm text-muted">{t(doc === "cv" ? "pdfNone" : "pdfNoCover")}</p>
         )}
       </div>
     </div>

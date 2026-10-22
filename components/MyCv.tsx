@@ -5,7 +5,8 @@ import { api, post } from "./api";
 import Field from "./Field";
 import Icon from "./Icon";
 
-export default function MyCv({ onSaved }: { onSaved: (has: boolean) => void }) {
+export default function MyCv({ kind = "cv", onSaved }: { kind?: "cv" | "cover"; onSaved: (has: boolean) => void }) {
+  const endpoint = kind === "cv" ? "/api/cv" : "/api/cover";
   const { t } = useI18n();
   const [tex, setTex] = useState("");
   const [msg, setMsg] = useState<{ text: string; error?: boolean }>({ text: "" });
@@ -14,16 +15,16 @@ export default function MyCv({ onSaved }: { onSaved: (has: boolean) => void }) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    api<{ tex: string }>("/api/cv").then((d) => {
+    api<{ tex: string }>(endpoint).then((d) => {
       setTex(d.tex);
       setHasSaved(!!d.tex);
     });
-  }, []);
+  }, [endpoint]);
   useEffect(() => setLoaded(false), [v]);
 
   async function save() {
     try {
-      await post("/api/cv", { tex });
+      await post(endpoint, { tex });
       setMsg({ text: t("cvSaved") });
       setHasSaved(true);
       onSaved(true);
@@ -45,21 +46,21 @@ export default function MyCv({ onSaved }: { onSaved: (has: boolean) => void }) {
           <span role="status" className={`text-sm ${msg.error ? "text-red-ink" : "text-muted"}`}>{msg.text}</span>
         </div>
         <div className="flex min-h-0 flex-1 flex-col">
-          <Field label={t("cvEditor")}>
-            {(id) => <textarea id={id} className="input h-full min-h-[20rem] flex-1 resize-none font-mono text-xs leading-5" value={tex} onChange={(e) => setTex(e.target.value)} spellCheck={false} placeholder={t("cvPlaceholder")} />}
+          <Field label={t(kind === "cv" ? "cvEditor" : "coverEditor")}>
+            {(id) => <textarea id={id} className="input h-full min-h-[20rem] flex-1 resize-none font-mono text-xs leading-5" value={tex} onChange={(e) => setTex(e.target.value)} spellCheck={false} placeholder={t(kind === "cv" ? "cvPlaceholder" : "coverPlaceholder")} />}
           </Field>
         </div>
       </div>
       <div className="flex min-h-[28rem] flex-col overflow-hidden rounded-xl border border-line bg-sunken">
-        <div className="border-b border-line bg-surface px-3 py-2 text-sm font-medium">{t("cvOriginalPdf")}</div>
+        <div className="border-b border-line bg-surface px-3 py-2 text-sm font-medium">{t(kind === "cv" ? "cvOriginalPdf" : "coverBasePdf")}</div>
         <div className="relative min-h-0 flex-1">
           {hasSaved ? (
             <>
               {!loaded && <div role="status" className="absolute inset-0 grid place-items-center text-sm text-muted"><span className="flex items-center gap-2"><span className="spinner" aria-hidden /> {t("pdfCompiling")}</span></div>}
-              <iframe key={v} src={`/api/jobs/0/pdf?which=original&v=${v}`} onLoad={() => setLoaded(true)} title={t("cvOriginalPdf")} className={`h-full w-full transition-opacity duration-200 ease-out ${loaded ? "opacity-100" : "opacity-0"}`} />
+              <iframe key={`${kind}-${v}`} src={`/api/jobs/0/pdf?which=original&doc=${kind}&v=${v}`} onLoad={() => setLoaded(true)} title={t(kind === "cv" ? "cvOriginalPdf" : "coverBasePdf")} className={`h-full w-full transition-opacity duration-200 ease-out ${loaded ? "opacity-100" : "opacity-0"}`} />
             </>
           ) : (
-            <p className="p-4 text-sm text-muted">{t("noCvBody")}</p>
+            <p className="p-4 text-sm text-muted">{t(kind === "cv" ? "noCvBody" : "noCoverBody")}</p>
           )}
         </div>
       </div>

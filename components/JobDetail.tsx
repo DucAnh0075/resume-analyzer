@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import type { Change, Job, JobStatus, TailorResult } from "@/lib/types";
 import { fitChip } from "./JobList";
+import CoverPanel from "./CoverPanel";
 import Icon from "./Icon";
 
 interface Props {
@@ -12,6 +13,10 @@ interface Props {
   error?: string;
   hasCv: boolean;
   fitBusy: boolean;
+  hasCover: boolean;
+  onCoverChanged: () => void;
+  onGoCover: () => void;
+  onBookmark: () => void;
   onFit: () => void;
   onTailor: (opts: { adoptLanguage: boolean; aggressive: boolean }) => void;
   onStatus: (s: JobStatus) => void;
@@ -20,10 +25,10 @@ interface Props {
 }
 
 const TYPE_CHIP: Record<Change["type"], string> = { added: "chip-amber", rewritten: "chip-accent", reordered: "" };
-const TABS = ["fit", "desc", "changes", "diff"] as const;
+const TABS = ["fit", "desc", "changes", "diff", "cover"] as const;
 type Tab = (typeof TABS)[number];
 
-export default function JobDetail({ job, result, busy, error, hasCv, fitBusy, onFit, onTailor, onStatus, onBack, onGoCv }: Props) {
+export default function JobDetail({ job, result, busy, error, hasCv, fitBusy, hasCover, onCoverChanged, onGoCover, onBookmark, onFit, onTailor, onStatus, onBack, onGoCv }: Props) {
   const { t, date } = useI18n();
   const [tab, setTab] = useState<Tab>("fit");
   const [adoptLanguage, setAdoptLanguage] = useState(false);
@@ -35,6 +40,7 @@ export default function JobDetail({ job, result, busy, error, hasCv, fitBusy, on
     desc: t("tabDescription"),
     changes: result ? `${t("tabChanges")} (${result.changes.length})` : t("tabChanges"),
     diff: t("tabDiff"),
+    cover: t("tabCover"),
   };
 
   function onTabKey(e: React.KeyboardEvent) {
@@ -53,7 +59,12 @@ export default function JobDetail({ job, result, busy, error, hasCv, fitBusy, on
           <Icon name="back" /> {t("back")}
         </button>
         <div>
-          <h2 className="text-lg font-semibold leading-snug">{job.title}</h2>
+          <div className="flex items-start justify-between gap-2">
+            <h2 className="text-lg font-semibold leading-snug">{job.title}</h2>
+            <button className="btn btn-ghost btn-icon -mr-2 -mt-1 shrink-0" aria-pressed={!!job.bookmarked} aria-label={job.bookmarked ? t("unbookmark") : t("bookmark")} title={job.bookmarked ? t("unbookmark") : t("bookmark")} onClick={onBookmark}>
+              <Icon name="star" filled={!!job.bookmarked} />
+            </button>
+          </div>
           <p className="mt-0.5 text-sm text-muted">
             {[job.company, job.location, job.postedAt && date(job.postedAt)].filter(Boolean).join(" · ")}
           </p>
@@ -90,6 +101,9 @@ export default function JobDetail({ job, result, busy, error, hasCv, fitBusy, on
             </a>
           )}
         </div>
+        {job.status === "ignoriert" && job.filterReason && (
+          <p className="rounded-lg bg-sunken p-2.5 text-sm"><span className="font-medium">{t("filteredBy")}</span> <span className="text-muted">{job.filterReason}</span></p>
+        )}
         {!hasCv && <p className="text-sm text-muted">{t("noCvBody")}</p>}
         <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
           <label className="flex items-center gap-2" title={t("optAggressiveHint")}>
@@ -197,6 +211,8 @@ export default function JobDetail({ job, result, busy, error, hasCv, fitBusy, on
           ) : (
             <Empty title={t("noTailored")} body={t("noTailoredHint")} />
           ))}
+
+        {tab === "cover" && <CoverPanel job={job} hasCover={hasCover} hasCv={hasCv} onChanged={onCoverChanged} onGoCover={onGoCover} />}
       </div>
     </div>
   );

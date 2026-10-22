@@ -55,6 +55,7 @@ export async function tailorCv(
     tailorPrompt({ job: { ...job, description: job.description ?? "" }, body: masked, ...opts }),
     tailorJsonSchema,
     TailorSchema,
+    { temperature: 0.3 },
   );
 
   let newBody = sanitizeBody(unmaskContacts(result.body, map));

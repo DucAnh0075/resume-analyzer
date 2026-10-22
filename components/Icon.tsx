@@ -8,15 +8,16 @@ const PATHS = {
   download: "M12 3v12m0 0-4-4m4 4 4-4M4 21h16",
   check: "m5 12 5 5L20 7",
   spark: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z",
+  star: "m12 3 2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.5 6.6 19.5l1.2-6L3.3 9.3l6.1-.7L12 3Z",
   plus: "M12 5v14M5 12h14",
   file: "M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7l-4-4Zm0 0v4h4",
 } as const;
 
 export type IconName = keyof typeof PATHS;
 
-export default function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
+export default function Icon({ name, size = 16, filled = false }: { name: IconName; size?: number; filled?: boolean }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
       <path d={PATHS[name]} />
     </svg>
   );

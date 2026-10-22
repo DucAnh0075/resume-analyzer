@@ -14,6 +14,7 @@ export async function generateJson<T>(
   prompt: string,
   jsonSchema: Record<string, unknown>,
   parser: z.ZodType<T>,
+  opts: { temperature?: number } = {},
 ): Promise<T> {
   const ai = client();
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -23,7 +24,7 @@ export async function generateJson<T>(
       const res = await ai.models.generateContent({
         model,
         contents: prompt,
-        config: { responseMimeType: "application/json", responseJsonSchema: jsonSchema, temperature: 0.7 },
+        config: { responseMimeType: "application/json", responseJsonSchema: jsonSchema, temperature: opts.temperature ?? 0.7 },
       });
       return parser.parse(JSON.parse(res.text ?? ""));
     } catch (e) {

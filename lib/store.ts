@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Job, SearchProfile } from "./types";
+import type { Application, Job, SearchProfile } from "./types";
 
 const DATA = path.join(process.cwd(), "data");
 
@@ -46,3 +46,19 @@ export async function saveCv(tex: string) {
   await fs.mkdir(DATA, { recursive: true });
   await fs.writeFile(path.join(DATA, "cv.tex"), tex);
 }
+
+export async function getCover(): Promise<string> {
+  try {
+    return await fs.readFile(path.join(DATA, "cover.tex"), "utf8");
+  } catch {
+    return "";
+  }
+}
+
+export async function saveCover(tex: string) {
+  await fs.mkdir(DATA, { recursive: true });
+  await fs.writeFile(path.join(DATA, "cover.tex"), tex);
+}
+
+export const getApplications = () => readJson<Record<string, Application>>("applications.json", {});
+export const saveApplications = (a: Record<string, Application>) => writeJson("applications.json", a);

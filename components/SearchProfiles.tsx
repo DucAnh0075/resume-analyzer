@@ -79,6 +79,9 @@ export default function SearchProfiles({ searches, onChange }: { searches: Searc
           </Field>
           <Field label={t("fMax")}>{(id) => <input id={id} className="input" type="number" min={10} max={100} value={form.maxResults} onChange={(e) => setForm({ ...form, maxResults: Number(e.target.value) })} />}</Field>
         </div>
+        <Field label={t("fAiFilter")} hint={t("fAiFilterHint")}>
+          {(id) => <textarea id={id} className="input min-h-[5.5rem] resize-y" rows={3} placeholder={t("fAiFilterPh")} value={form.aiFilter ?? ""} onChange={(e) => setForm({ ...form, aiFilter: e.target.value })} />}
+        </Field>
         {err && <p role="alert" className="text-sm text-red-ink">{err}</p>}
         <div className="flex gap-2">
           <button type="submit" className="btn btn-primary">{t("save")}</button>
@@ -93,7 +96,7 @@ export default function SearchProfiles({ searches, onChange }: { searches: Searc
             {searches.map((s) => (
               <li key={s.id} className="flex items-start justify-between gap-3 p-3">
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{s.name}</p>
+                  <p className="flex items-center gap-2 font-medium"><span className="truncate">{s.name}</span>{s.aiFilter && <span className="chip chip-accent shrink-0" title={s.aiFilter}>{t("chipAiFilter")}</span>}</p>
                   <p className="text-sm text-muted">{s.location || t("everywhere")} · {s.radiusKm} km · {t(POSTED.find(([v]) => v === s.postedWithin)![1])}</p>
                 </div>
                 <div className="flex shrink-0 gap-1">

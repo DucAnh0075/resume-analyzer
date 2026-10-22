@@ -134,7 +134,7 @@
   @media (pointer: coarse) { .seg > button { min-height: 2.5rem; } }
 
   .job-row { transition: background-color 140ms var(--ease-out); }
-  @media (hover: hover) and (pointer: fine) { .job-row:hover:not([aria-current]) { background-color: var(--sunken); } }
+  @media (hover: hover) and (pointer: fine) { .job-row:hover:not([data-selected]) { background-color: var(--sunken); } }
 
   .pane-in { animation: pane-in 200ms var(--ease-out) both; }
   .spinner {

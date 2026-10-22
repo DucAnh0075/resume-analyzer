@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, post } from "@/components/api";
 import JobDetail from "@/components/JobDetail";
 import JobList, { type JobFilter } from "@/components/JobList";
+import Applications from "@/components/Applications";
 import ManualJob, { type ManualInput } from "@/components/ManualJob";
 import MyCv from "@/components/MyCv";
 import PdfPanel from "@/components/PdfPanel";
@@ -11,9 +12,9 @@ import { LangToggle, ThemeToggle } from "@/components/Toggles";
 import { useI18n, type Key } from "@/lib/i18n";
 import type { Job, JobStatus, SearchProfile, TailorResult } from "@/lib/types";
 
-type Page = "jobs" | "searches" | "cv" | "manual";
+type Page = "jobs" | "applications" | "searches" | "cv" | "cover" | "manual";
 type Pane = "list" | "detail" | "pdf";
-const NAV: [Page, Key][] = [["jobs", "navJobs"], ["searches", "navSearches"], ["cv", "navCv"], ["manual", "navManual"]];
+const NAV: [Page, Key][] = [["jobs", "navJobs"], ["applications", "navApplications"], ["searches", "navSearches"], ["cv", "navCv"], ["cover", "navCover"], ["manual", "navManual"]];
 
 export default function Home() {
   const { t, lang } = useI18n();
@@ -23,10 +24,12 @@ export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [searches, setSearches] = useState<SearchProfile[]>([]);
   const [hasCv, setHasCv] = useState(true);
+  const [hasCover, setHasCover] = useState(true);
   const [selectedId, setSelectedId] = useState<string>();
   const [result, setResult] = useState<TailorResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [filtering, setFiltering] = useState(false);
   const [error, setError] = useState<string>();
   const [info, setInfo] = useState("");
   const [version, setVersion] = useState(0);
@@ -43,6 +46,7 @@ export default function Home() {
   useEffect(() => {
     reload();
     api<{ tex: string }>("/api/cv").then((d) => setHasCv(!!d.tex));
+    api<{ tex: string }>("/api/cover").then((d) => setHasCover(!!d.tex));
   }, [reload]);
 
   const selected = jobs.find((j) => j.id === selectedId);
@@ -63,13 +67,29 @@ export default function Home() {
     setSearching(true);
     setInfo(t("searching"));
     try {
-      const r = await post<{ added: number; total: number; warning?: string }>("/api/search/run", { searchId: runSearchId });
-      setInfo(`${t("searchDone", { added: r.added, total: r.total })}${r.warning ? " " + r.warning : ""}`);
+      const r = await post<{ added: number; filtered: number; total: number; warning?: string }>("/api/search/run", { searchId: runSearchId });
+      const msg = r.filtered ? t("searchDoneFiltered", { added: r.added, total: r.total, filtered: r.filtered }) : t("searchDone", { added: r.added, total: r.total });
+      setInfo(`${msg}${r.warning ? " " + r.warning : ""}`);
       await reload();
     } catch (e) {
       setInfo((e as Error).message);
     } finally {
       setSearching(false);
+    }
+  }
+
+  async function applyFilter() {
+    if (!runSearchId) return;
+    setFiltering(true);
+    setInfo(t("aiFiltering"));
+    try {
+      const r = await post<{ checked: number; filtered: number }>("/api/search/filter", { searchId: runSearchId });
+      setInfo(t("aiFilterDone", r));
+      await reload();
+    } catch (e) {
+      setInfo((e as Error).message);
+    } finally {
+      setFiltering(false);
     }
   }
 
@@ -110,6 +130,12 @@ export default function Home() {
     reload();
   }
 
+  async function bulk(ids: string[], patch: { status?: JobStatus; bookmarked?: boolean }) {
+    if (!ids.length) return;
+    await post("/api/jobs/bulk", { ids, ...patch });
+    reload();
+  }
+
   const show = (p: Pane) => (pane === p ? "flex" : "hidden") + " lg:flex";
 
   return (
@@ -140,11 +166,14 @@ export default function Home() {
                 filter={filter}
                 runSearchId={runSearchId}
                 busy={searching}
+                filterBusy={filtering}
+                onApplyFilter={applyFilter}
                 info={info}
                 onFilter={setFilter}
                 onRunSearchId={setRunSearchId}
                 onRunSearch={runSearch}
                 onSelect={select}
+                onBulk={bulk}
                 onGo={setPage}
               />
             </section>
@@ -158,6 +187,10 @@ export default function Home() {
                     error={error}
                     hasCv={hasCv}
                     fitBusy={fitBusy}
+                    hasCover={hasCover}
+                    onCoverChanged={() => { reload(); setVersion((v) => v + 1); }}
+                    onGoCover={() => setPage("cover")}
+                    onBookmark={() => bulk([selected.id], { bookmarked: !selected.bookmarked })}
                     onFit={() => analyzeFit(selected.id)}
                     onStatus={setStatus}
                     onBack={() => setPane("list")}
@@ -180,8 +213,10 @@ export default function Home() {
             )}
           </div>
         )}
+        {page === "applications" && <Applications jobs={jobs} onOpenJob={(id) => { setPage("jobs"); select(id); }} />}
         {page === "searches" && <SearchProfiles searches={searches} onChange={reload} />}
         {page === "cv" && <MyCv onSaved={setHasCv} />}
+        {page === "cover" && <MyCv kind="cover" onSaved={setHasCover} />}
         {page === "manual" && <ManualJob busy={busy} error={error} onSubmit={(m: ManualInput) => tailor({ ...m, aggressive: true })} />}
       </main>
     </div>

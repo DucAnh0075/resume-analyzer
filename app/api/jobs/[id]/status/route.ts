@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ensureApplications } from "@/lib/applications";
 import { getJob, upsertJob } from "@/lib/store";
 import type { JobStatus } from "@/lib/types";
 
@@ -9,5 +10,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { status } = (await req.json()) as { status: JobStatus };
   const job = await getJob(id);
   if (!job || !VALID.includes(status)) return NextResponse.json({ error: "Ungültig" }, { status: 400 });
-  return NextResponse.json(await upsertJob({ ...job, status }));
+  const saved = await upsertJob({ ...job, status });
+  if (status === "beworben") await ensureApplications([saved]);
+  return NextResponse.json(saved);
 }

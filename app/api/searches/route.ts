@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     experience: p.experience ?? [],
     excludeKeywords: (p.excludeKeywords ?? []).map((k) => k.trim()).filter(Boolean),
     maxResults: Math.min(Number(p.maxResults) || 50, 100),
+    aiFilter: p.aiFilter?.trim() || undefined,
   };
   const next = all.some((s) => s.id === profile.id) ? all.map((s) => (s.id === profile.id ? profile : s)) : [...all, profile];
   await saveSearches(next);

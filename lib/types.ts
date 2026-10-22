@@ -14,6 +14,7 @@ export interface SearchProfile {
   experience: Experience[];
   excludeKeywords: string[];
   maxResults: number;
+  aiFilter?: string;
 }
 
 export interface FitPoint {
@@ -41,6 +42,9 @@ export interface Job {
   status: JobStatus;
   searchId?: string;
   tailored?: boolean;
+  cover?: boolean;
+  bookmarked?: boolean;
+  filterReason?: string;
   score?: number;
   fit?: JobFit;
   foundAt: string;
@@ -57,4 +61,26 @@ export interface TailorResult {
   keywordsUsed: string[];
   texDiff: string;
   tailoredAt: string;
+}
+
+export interface CoverResult {
+  changes: Change[];
+  hints?: string;
+  coverAt: string;
+  edited?: boolean;
+}
+
+export type AppStage = "beworben" | "keine_antwort" | "absage" | "interview" | "angebot" | "angenommen" | "abgelehnt";
+
+export interface Application {
+  id: string;
+  jobId?: string;
+  title: string;
+  company: string;
+  location?: string;
+  url?: string;
+  appliedAt: string;
+  stage: AppStage;
+  history: { stage: AppStage; at: string }[];
+  notes?: string;
 }
