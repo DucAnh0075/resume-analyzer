@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Application, Job, SearchProfile } from "./types";
+import type { Application, Job, Profile, SearchProfile } from "./types";
 
 const DATA = path.join(process.cwd(), "data");
 
@@ -62,3 +62,11 @@ export async function saveCover(tex: string) {
 
 export const getApplications = () => readJson<Record<string, Application>>("applications.json", {});
 export const saveApplications = (a: Record<string, Application>) => writeJson("applications.json", a);
+
+export const EMPTY_PROFILE: Profile = {
+  firstName: "", lastName: "", email: "", phone: "", street: "", zip: "", city: "", country: "Deutschland", answers: [],
+};
+export async function getProfile(): Promise<Profile> {
+  return { ...EMPTY_PROFILE, ...(await readJson<Partial<Profile>>("profile.json", {})) };
+}
+export const saveProfile = (p: Profile) => writeJson("profile.json", p);

@@ -45,6 +45,7 @@ export interface Job {
   cover?: boolean;
   bookmarked?: boolean;
   filterReason?: string;
+  filterOverride?: boolean;
   score?: number;
   fit?: JobFit;
   foundAt: string;
@@ -83,4 +84,27 @@ export interface Application {
   stage: AppStage;
   history: { stage: AppStage; at: string }[];
   notes?: string;
+}
+
+export interface Profile {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  street: string;
+  zip: string;
+  city: string;
+  country: string;
+  birthDate?: string;
+  nationality?: string;
+  workPermit?: string;
+  salaryExpectation?: string;
+  earliestStart?: string;
+  noticePeriod?: string;
+  workHours?: string;
+  languages?: string;
+  linkedin?: string;
+  github?: string;
+  website?: string;
+  answers: { question: string; answer: string }[];
 }

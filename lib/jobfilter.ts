@@ -48,7 +48,7 @@ REGELN
 - "keep": false nur, wenn die Stelle klar nicht zu den Vorgaben passt. Im Zweifel true.
 - "reason": ein kurzer Satz auf Deutsch, warum.
 - Gib für jede id genau ein Ergebnis zurück, ids unverändert übernehmen.`;
-    const r = await generateJson(prompt, filterJsonSchema, FilterSchema, { temperature: 0.1 });
+    const r = await generateJson(prompt, filterJsonSchema, FilterSchema, { temperature: 0.1, lite: true });
     for (const x of r.results) out.set(x.id, { keep: x.keep, reason: x.reason });
   }
   return out;

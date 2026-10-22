@@ -9,6 +9,9 @@ Lokales Ein-Nutzer-Tool, das LinkedIn-Stellenanzeigen sucht und deinen LaTeX-Leb
 - **Passungsanalyse:** Auf Wunsch bewertet Gemini eine Stelle mit Score, Fazit sowie Pro- und Contra-Punkten.
 - **CV-Anpassung:** Gemini schreibt den Inhalt deines LaTeX-CVs für die Stelle um. Änderungen werden aufgelistet, das Ergebnis wird kompiliert und als PDF angezeigt.
 - **Manuelle Eingabe:** Stellentext einfügen, falls LinkedIn die Abfrage blockiert.
+- **AI-Filter:** Pro Suchprofil beschreibst du in Freitext, was du suchst (z. B. nur Softwareentwicklung, kein Consulting). Gemini sortiert neue Treffer nach Titel, Firma und Ort aus. Im Reiter „AI-Filter“ siehst du die Begründungen und kannst Stellen wiederherstellen.
+- **Anschreiben, Merken, Mehrfach-Ignorieren, Bewerbungsstand (Sankey).**
+- **Bewerbungs-Agent:** Chrome-Extension, die eine Bewerbung selbstständig ausfüllt und vor dem Absenden um Erlaubnis fragt (siehe unten).
 - **Mein CV:** Basis-CV als `.tex` im Browser bearbeiten, das Original lässt sich als PDF ansehen.
 
 ## Voraussetzungen
@@ -38,6 +41,17 @@ npm run dev
 ```
 
 Die App läuft dann auf http://localhost:3000. Ein Beispiel-CV liegt in `examples/cv_example.tex`. Du kannst es unter „Mein CV“ als Ausgangspunkt einfügen.
+
+## Bewerbungs-Agent (Chrome-Extension)
+
+1. `npm run dev` starten und unter „Profil“ deine Stammdaten eintragen (Button „Aus CV vorausfüllen“ hilft).
+2. In Chrome `chrome://extensions` öffnen, den Entwicklermodus einschalten, „Entpackte Erweiterung laden“ und den Ordner `extension/` wählen.
+3. Die angezeigte Extension-ID unter „Profil“ eintragen.
+4. In einer Stelle auf „Mit Agent bewerben“ klicken. Alternativ auf einer Bewerbungsseite das Extension-Popup öffnen und „Agent auf dieser Seite starten“ wählen.
+
+Der Agent öffnet die Seite, klickt sich zum Formular durch, trägt Daten ein, lädt CV und Anschreiben hoch und geht mehrstufige Formulare durch. **Abgesendet wird erst nach deiner Bestätigung** in der Zusammenfassung. Danach landet die Bewerbung im Bewerbungsstand. Standardfelder werden ohne AI-Aufruf ausgefüllt, Gemini bekommt nur die offenen Felder (Free-Tier-schonend, Agent-Schritte laufen auf `GEMINI_MODEL_LITE`, Standard `gemini-3.5-flash-lite`, fällt bei Abkündigung auf `GEMINI_MODEL` zurück). Deine Kontaktdaten gehen nie an Gemini.
+
+Grenzen: Bei Login, Captcha oder Account-Anlage pausiert der Agent und wartet auf dich. LinkedIn „Easy Apply“ wird bewusst nicht automatisiert. Eigene Auswahlfelder ohne echtes `<select>` oder Formulare in fremden iframes können Handarbeit brauchen. Zum gefahrlosen Ausprobieren gibt es ein Testformular unter http://localhost:3000/test-form.html (sendet nichts).
 
 ## Befehle
 

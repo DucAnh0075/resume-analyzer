@@ -4,7 +4,9 @@ import { api, post } from "@/components/api";
 import JobDetail from "@/components/JobDetail";
 import JobList, { type JobFilter } from "@/components/JobList";
 import Applications from "@/components/Applications";
+import AiFilterPage from "@/components/AiFilterPage";
 import ManualJob, { type ManualInput } from "@/components/ManualJob";
+import MyProfile, { EXT_KEY } from "@/components/MyProfile";
 import MyCv from "@/components/MyCv";
 import PdfPanel from "@/components/PdfPanel";
 import SearchProfiles from "@/components/SearchProfiles";
@@ -12,9 +14,9 @@ import { LangToggle, ThemeToggle } from "@/components/Toggles";
 import { useI18n, type Key } from "@/lib/i18n";
 import type { Job, JobStatus, SearchProfile, TailorResult } from "@/lib/types";
 
-type Page = "jobs" | "applications" | "searches" | "cv" | "cover" | "manual";
+type Page = "jobs" | "applications" | "aifilter" | "searches" | "cv" | "cover" | "profile" | "manual";
 type Pane = "list" | "detail" | "pdf";
-const NAV: [Page, Key][] = [["jobs", "navJobs"], ["applications", "navApplications"], ["searches", "navSearches"], ["cv", "navCv"], ["cover", "navCover"], ["manual", "navManual"]];
+const NAV: [Page, Key][] = [["jobs", "navJobs"], ["applications", "navApplications"], ["aifilter", "navAiFilter"], ["searches", "navSearches"], ["cv", "navCv"], ["cover", "navCover"], ["profile", "navProfile"], ["manual", "navManual"]];
 
 export default function Home() {
   const { t, lang } = useI18n();
@@ -78,12 +80,12 @@ export default function Home() {
     }
   }
 
-  async function applyFilter() {
-    if (!runSearchId) return;
+  async function applyFilter(searchId = runSearchId) {
+    if (!searchId) return;
     setFiltering(true);
     setInfo(t("aiFiltering"));
     try {
-      const r = await post<{ checked: number; filtered: number }>("/api/search/filter", { searchId: runSearchId });
+      const r = await post<{ checked: number; filtered: number }>("/api/search/filter", { searchId });
       setInfo(t("aiFilterDone", r));
       await reload();
     } catch (e) {
@@ -130,6 +132,21 @@ export default function Home() {
     reload();
   }
 
+  // The extension is reachable from this origin through externally_connectable.
+  async function startAgent(jobId: string) {
+    setError(undefined);
+    type Ext = { runtime?: { sendMessage: (id: string, msg: unknown, cb: (r?: { ok: boolean; error?: string }) => void) => void; lastError?: unknown } };
+    const ext = (window as unknown as { chrome?: Ext }).chrome;
+    let id = "";
+    try { id = localStorage.getItem(EXT_KEY) ?? ""; } catch {}
+    if (!ext?.runtime?.sendMessage || !id) return setError(t("agentNoExt"));
+    ext.runtime.sendMessage(id, { cmd: "start", jobId }, (r) => {
+      if (!r || ext.runtime?.lastError) setError(t("agentNoExt"));
+      else if (!r.ok) setError(r.error ?? t("agentNoExt"));
+      else setInfo(t("agentStarted"));
+    });
+  }
+
   async function bulk(ids: string[], patch: { status?: JobStatus; bookmarked?: boolean }) {
     if (!ids.length) return;
     await post("/api/jobs/bulk", { ids, ...patch });
@@ -167,7 +184,7 @@ export default function Home() {
                 runSearchId={runSearchId}
                 busy={searching}
                 filterBusy={filtering}
-                onApplyFilter={applyFilter}
+                onApplyFilter={() => applyFilter()}
                 info={info}
                 onFilter={setFilter}
                 onRunSearchId={setRunSearchId}
@@ -190,6 +207,7 @@ export default function Home() {
                     hasCover={hasCover}
                     onCoverChanged={() => { reload(); setVersion((v) => v + 1); }}
                     onGoCover={() => setPage("cover")}
+                    onAgent={() => startAgent(selected.id)}
                     onBookmark={() => bulk([selected.id], { bookmarked: !selected.bookmarked })}
                     onFit={() => analyzeFit(selected.id)}
                     onStatus={setStatus}
@@ -213,9 +231,13 @@ export default function Home() {
             )}
           </div>
         )}
-        {page === "applications" && <Applications jobs={jobs} onOpenJob={(id) => { setPage("jobs"); select(id); }} />}
-        {page === "searches" && <SearchProfiles searches={searches} onChange={reload} />}
+        {page === "applications" && <div className="h-full overflow-y-auto"><Applications jobs={jobs} onOpenJob={(id) => { setPage("jobs"); select(id); }} /></div>}
+        {page === "aifilter" && (
+          <div className="h-full overflow-y-auto"><AiFilterPage jobs={jobs} searches={searches} busy={filtering} info={info} onApply={(id) => { setRunSearchId(id); applyFilter(id); }} onRestore={(ids) => bulk(ids, { status: "angesehen" })} onOpenJob={(id) => { setFilter({ status: "alle", searchId: "", q: "" }); setPage("jobs"); select(id); }} /></div>
+        )}
+        {page === "searches" && <div className="h-full overflow-y-auto"><SearchProfiles searches={searches} onChange={reload} /></div>}
         {page === "cv" && <MyCv onSaved={setHasCv} />}
+        {page === "profile" && <div className="h-full overflow-y-auto"><MyProfile /></div>}
         {page === "cover" && <MyCv kind="cover" onSaved={setHasCover} />}
         {page === "manual" && <ManualJob busy={busy} error={error} onSubmit={(m: ManualInput) => tailor({ ...m, aggressive: true })} />}
       </main>

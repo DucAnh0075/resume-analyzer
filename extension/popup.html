@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font: 14px/1.45 system-ui, sans-serif; width: 320px; margin: 0; padding: 14px; color: #1b1f24; }
+    h1 { font-size: 14px; margin: 0 0 8px; }
+    select, button { font: inherit; width: 100%; box-sizing: border-box; margin-top: 8px; padding: 7px 10px; border-radius: 8px; border: 1px solid #c9d1d9; background: #f6f8fa; }
+    button.primary { background: #1a7f64; color: #fff; border-color: #1a7f64; cursor: pointer; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    #status { font-size: 12px; color: #57606a; } #msg { margin-top: 8px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Resume Analyzer Agent</h1>
+  <div id="status">Prüfe Verbindung…</div>
+  <select id="job" aria-label="Stelle"></select>
+  <button class="primary" id="start" disabled>Agent auf dieser Seite starten</button>
+  <button id="applied" disabled>Als beworben eintragen</button>
+  <div id="msg" role="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

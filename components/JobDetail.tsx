@@ -17,6 +17,7 @@ interface Props {
   onCoverChanged: () => void;
   onGoCover: () => void;
   onBookmark: () => void;
+  onAgent: () => void;
   onFit: () => void;
   onTailor: (opts: { adoptLanguage: boolean; aggressive: boolean }) => void;
   onStatus: (s: JobStatus) => void;
@@ -28,7 +29,7 @@ const TYPE_CHIP: Record<Change["type"], string> = { added: "chip-amber", rewritt
 const TABS = ["fit", "desc", "changes", "diff", "cover"] as const;
 type Tab = (typeof TABS)[number];
 
-export default function JobDetail({ job, result, busy, error, hasCv, fitBusy, hasCover, onCoverChanged, onGoCover, onBookmark, onFit, onTailor, onStatus, onBack, onGoCv }: Props) {
+export default function JobDetail({ job, result, busy, error, hasCv, fitBusy, hasCover, onCoverChanged, onGoCover, onBookmark, onAgent, onFit, onTailor, onStatus, onBack, onGoCv }: Props) {
   const { t, date } = useI18n();
   const [tab, setTab] = useState<Tab>("fit");
   const [adoptLanguage, setAdoptLanguage] = useState(false);
@@ -94,6 +95,9 @@ export default function JobDetail({ job, result, busy, error, hasCv, fitBusy, ha
               </button>
               <button className="btn btn-ghost" onClick={() => onStatus("ignoriert")}>{t("markIgnored")}</button>
             </>
+          )}
+          {hasCv && job.status !== "ignoriert" && (
+            <button className="btn" onClick={onAgent} title={t("agentApplyHint")}><Icon name="spark" /> {t("agentApply")}</button>
           )}
           {job.url && (
             <a className="btn btn-ghost ml-auto" href={job.url} target="_blank" rel="noreferrer">

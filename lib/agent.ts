@@ -1,0 +1,151 @@
+import { z } from "zod";
+import type { AgentAction, AgentElement, AgentStepInput, AgentStepResult } from "./agent-types";
+import { mapFields, pickOption, profileValue, SUBMIT_RE } from "./fieldmap";
+import { generateJson } from "./gemini";
+import { maskContacts, splitCv } from "./latex";
+import type { Job, Profile } from "./types";
+
+const CONFIRMED_RE = /vielen dank f(ü|ue)r (ihre|deine) bewerbung|thank you for (applying|your application)|bewerbung (wurde )?(erfolgreich )?(eingegangen|gesendet|(ü|ue)bermittelt)|application (has been |was )?(received|submitted|sent)/i;
+const CAPTCHA_RE = /captcha|ich bin kein roboter|i'?m not a robot|verify you are human/i;
+const EASY_APPLY_RE = /easy apply|einfach bewerben/i;
+
+const PROFILE_KEYS = [
+  "firstName", "lastName", "fullName", "email", "phone", "street", "zip", "city", "country", "birthDate", "nationality", "workPermit",
+  "salaryExpectation", "earliestStart", "noticePeriod", "workHours", "languages", "linkedin", "github", "website",
+] as const;
+
+const LlmSchema = z.object({
+  results: z.array(z.object({ id: z.string(), action: z.enum(["fill", "select", "check", "skip"]), value: z.string(), profileKey: z.string() })),
+  clickId: z.string(),
+});
+const llmJsonSchema = {
+  type: "object",
+  properties: {
+    results: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          action: { type: "string", enum: ["fill", "select", "check", "skip"] },
+          value: { type: "string" },
+          profileKey: { type: "string" },
+        },
+        required: ["id", "action", "value", "profileKey"],
+      },
+    },
+    clickId: { type: "string" },
+  },
+  required: ["results", "clickId"],
+};
+
+const describe = (e: AgentElement) =>
+  [`id=${e.id}`, `${e.kind}${e.type ? `/${e.type}` : ""}`, `label="${e.label}"`, e.required ? "Pflicht" : "", e.options?.length ? `Optionen: ${e.options.join(" | ")}` : ""].filter(Boolean).join(" ; ");
+
+async function askGemini(
+  job: Job | undefined,
+  cv: string,
+  profile: Profile,
+  unresolved: AgentElement[],
+  buttons: AgentElement[] | undefined,
+  pageText: string,
+) {
+  const { masked } = maskContacts(splitCv(cv).body);
+  const keys = PROFILE_KEYS.map((k) => `${k}: ${profileValue(profile, k) ? "gesetzt" : "leer"}`).join(", ");
+  const prompt = `Du füllst ein Bewerbungsformular für einen Bewerber aus. Entscheide für jedes offene Element, was eingetragen wird.
+
+${job ? `STELLE\nTitel: ${job.title}\nFirma: ${job.company}\nBeschreibung:\n${(job.description ?? "").slice(0, 3000)}\n` : `SEITENTEXT\n${pageText.slice(0, 3000)}\n`}
+LEBENSLAUF (LaTeX-Body, Faktenquelle):
+${masked}
+
+PROFIL-SCHLÜSSEL (Werte kennst du nicht, der Server setzt sie ein): ${keys}
+
+OFFENE ELEMENTE
+${unresolved.map(describe).join("\n") || "(keine)"}
+${buttons?.length ? `\nBUTTONS/LINKS (nur für "clickId")\n${buttons.map(describe).join("\n")}\n` : ""}
+REGELN
+- Pro offenem Element genau ein Eintrag. "fill": Text in "value" ODER Profil-Schlüssel in "profileKey" (dann value leer). "select": "value" ist exakt eine der Optionen. "check": "value" ist "true" oder "false". "skip": du weißt es nicht oder es ist eine rechtlich/persönlich sensible Frage (Diversity, Behinderung, Religion, Vorstrafen).
+- Freitextantworten: Stil und Wortwahl des Lebenslaufs übernehmen, nur Fakten daraus, höchstens 4 Sätze, keine Floskeln. Nichts erfinden. Kennst du die Antwort nicht aus CV oder Stelle, "skip".
+- Sprache: die der Frage.
+- "clickId": nur wenn keine Formularfelder offen sind und die Seite eine Schaltfläche braucht, um zur Bewerbung zu kommen (nie ein Absenden-Button). Sonst leerer String.`;
+  return generateJson(prompt, llmJsonSchema, LlmSchema, { temperature: 0.1, lite: true });
+}
+
+/** One agent step for the current page state. Standard fields are mapped locally, Gemini only sees what is left. */
+export async function agentStep(
+  input: AgentStepInput,
+  ctx: { job?: Job; cv: string; profile: Profile; hasCover: boolean },
+): Promise<AgentStepResult & { learned?: { question: string; answer: string }[] }> {
+  const { profile, job, cv } = ctx;
+  const text = `${input.title}\n${input.text}`;
+  const learned: { question: string; answer: string }[] = [];
+
+  if (CONFIRMED_RE.test(text)) return { status: "done", actions: [], message: "Bewerbung abgeschickt.", learned };
+  if (/linkedin\.com/.test(input.url) && EASY_APPLY_RE.test(input.text) && !input.elements.some((e) => e.kind === "field")) {
+    // Easy Apply is never automated; a plain external link to the company site is fine and is picked up below.
+    if (!input.elements.some((e) => /firmen|company/i.test(e.label) && /bewerben|apply/i.test(e.label)))
+      return { status: "blocked", actions: [], message: "LinkedIn Easy Apply wird nicht automatisiert. Bewirb dich dort selbst oder nutze die Firmenseite.", learned };
+  }
+  if (input.elements.some((e) => e.type === "password") || CAPTCHA_RE.test(text)) {
+    return { status: "need_user", actions: [], message: "Login oder Captcha erkannt. Erledige das selbst und klicke dann auf „Erledigt, weiter“.", learned };
+  }
+
+  const actions: AgentAction[] = [];
+  const done = [...(input.done ?? [])];
+
+  // answers the user typed for an earlier question
+  for (const a of input.answers ?? []) {
+    const el = input.elements.find((e) => e.id === a.id);
+    if (!el) continue;
+    const opt = el.options?.length ? pickOption(el.options, a.value) : undefined;
+    actions.push(opt ? { type: "select", id: a.id, option: opt, label: a.label } : { type: "fill", id: a.id, value: a.value, label: a.label });
+    if (a.remember) learned.push({ question: a.label, answer: a.value });
+  }
+  const answered = new Set((input.answers ?? []).map((a) => a.id));
+
+  const m = mapFields(input.elements, profile, { done: [...done, ...answered], hasCover: ctx.hasCover });
+  actions.push(...m.actions);
+  let unresolved = m.unresolved;
+
+  let clickId: string | undefined;
+  const needNav = !m.hasForm && !m.entryId && !m.nextId;
+  if (unresolved.length || needNav) {
+    const buttons = needNav ? input.elements.filter((e) => (e.kind === "button" || e.kind === "link") && !SUBMIT_RE.test(e.label)).slice(0, 40) : undefined;
+    const r = await askGemini(job, cv, profile, unresolved, buttons, input.text);
+    const still: AgentElement[] = [];
+    for (const e of unresolved) {
+      const x = r.results.find((y) => y.id === e.id);
+      const label = e.label || e.name || e.id;
+      if (!x || x.action === "skip") { still.push(e); continue; }
+      if (x.action === "check") { actions.push({ type: "check", id: e.id, checked: x.value === "true", label }); continue; }
+      if (x.action === "select") {
+        const opt = pickOption(e.options, x.value);
+        if (opt) actions.push({ type: "select", id: e.id, option: opt, label });
+        else still.push(e);
+        continue;
+      }
+      const fromProfile = x.profileKey && (PROFILE_KEYS as readonly string[]).includes(x.profileKey) ? profileValue(profile, x.profileKey as (typeof PROFILE_KEYS)[number]) : "";
+      const value = fromProfile || x.value.trim();
+      if (value) actions.push({ type: "fill", id: e.id, value, label, generated: !fromProfile });
+      else still.push(e);
+    }
+    unresolved = still;
+    if (r.clickId && input.elements.some((e) => e.id === r.clickId)) clickId = r.clickId;
+  }
+
+  if (actions.length) return { status: "continue", actions, learned };
+
+  // Only required fields we could not fill ask the user; optional free-text questions are simply skipped.
+  const blocking = unresolved.find((e) => e.required);
+  if (blocking) {
+    return { status: "ask", actions: [], question: { id: blocking.id, label: blocking.label || blocking.name || blocking.id, options: blocking.options }, learned };
+  }
+  if (m.hasForm) {
+    if (m.nextId && !done.includes(m.nextId)) return { status: "continue", actions: [{ type: "click", id: m.nextId, label: "Weiter" }], learned };
+    if (m.submitId) return { status: "ready_to_submit", actions: [], submitId: m.submitId, learned };
+    return { status: "need_user", actions: [], message: "Kein Absenden-Button gefunden. Prüfe die Seite und mach selbst weiter.", learned };
+  }
+  const entry = m.entryId ?? clickId;
+  if (entry && !done.includes(entry)) return { status: "continue", actions: [{ type: "click", id: entry, label: "Zur Bewerbung" }], learned };
+  return { status: "need_user", actions: [], message: "Ich finde auf dieser Seite keinen Weg zum Bewerbungsformular.", learned };
+}

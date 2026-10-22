@@ -17,8 +17,8 @@ export function splitCv(tex: string): SplitCv {
   return { preamble: tex.slice(0, i), body: tex.slice(i) };
 }
 
-const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-const PHONE = /(?:\+\d|\b0\d)[\d\s()/.-]{7,}\d/g;
+export const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+export const PHONE = /(?:\+\d|\b0\d)[\d\s()/.-]{7,}\d/g;
 
 /** Replaces e-mails and phone numbers with placeholders so they are not sent to the API. */
 export function maskContacts(text: string) {

@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Resume Analyzer Agent",
+  "version": "0.1.0",
+  "description": "Füllt Bewerbungsformulare mit Daten aus der lokalen Resume-Analyzer-App aus und fragt vor dem Absenden um Erlaubnis.",
+  "permissions": [
+    "scripting",
+    "tabs",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Resume Analyzer Agent"
+  },
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:3000/*"
+    ]
+  }
+}

@@ -45,7 +45,7 @@ export async function POST(req: Request) {
           }
         }
       } catch (e) {
-        filterWarning = `KI-Filter fehlgeschlagen, Stellen ungefiltert gespeichert: ${(e as Error).message}`;
+        filterWarning = `AI-Filter fehlgeschlagen, Stellen ungefiltert gespeichert: ${(e as Error).message}`;
       }
     }
     for (const j of fresh) stored[j.id] = j;

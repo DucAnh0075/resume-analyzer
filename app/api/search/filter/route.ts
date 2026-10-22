@@ -8,11 +8,11 @@ export const maxDuration = 120;
 export async function POST(req: Request) {
   const { searchId } = (await req.json()) as { searchId: string };
   const profile = (await getSearches()).find((s) => s.id === searchId);
-  if (!profile?.aiFilter?.trim()) return NextResponse.json({ error: "Dieses Suchprofil hat keinen KI-Filter." }, { status: 400 });
+  if (!profile?.aiFilter?.trim()) return NextResponse.json({ error: "Dieses Suchprofil hat keinen AI-Filter." }, { status: 400 });
   try {
     const jobs = await getJobs();
     const candidates = Object.values(jobs).filter(
-      (j) => j.searchId === searchId && (j.status === "neu" || j.status === "angesehen") && !j.bookmarked && !j.tailored && !j.cover,
+      (j) => j.searchId === searchId && (j.status === "neu" || j.status === "angesehen") && !j.bookmarked && !j.filterOverride && !j.tailored && !j.cover,
     );
     const verdicts = await aiFilterJobs(candidates, profile.aiFilter);
     let filtered = 0;
