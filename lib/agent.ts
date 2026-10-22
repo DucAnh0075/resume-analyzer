@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { AgentAction, AgentElement, AgentStepInput, AgentStepResult } from "./agent-types";
-import { forInput, keyFor, mapFields, pickOption, profileValue, SUBMIT_RE } from "./fieldmap";
+import type { AgentAction, AgentElement, AgentStepInput, AgentStepResult, ExpEntry } from "./agent-types";
+import { EXP_SECTION_RE, forInput, keyFor, mapFields, MAX_EXPERIENCE, pickOption, profileValue, SUBMIT_RE } from "./fieldmap";
 import { generateJson } from "./gemini";
 import { maskContacts, splitCv } from "./latex";
 import type { Job, Profile } from "./types";
@@ -42,8 +42,44 @@ const llmJsonSchema = {
   required: ["results", "clickId"],
 };
 
+const ExpSchema = z.object({ entries: z.array(z.object({ title: z.string(), company: z.string(), from: z.string(), to: z.string(), description: z.string() })) });
+const expJsonSchema = {
+  type: "object",
+  properties: {
+    entries: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { title: { type: "string" }, company: { type: "string" }, from: { type: "string" }, to: { type: "string" }, description: { type: "string" } },
+        required: ["title", "company", "from", "to", "description"],
+      },
+    },
+  },
+  required: ["entries"],
+};
+
+// One Gemini call per CV text and server run; the agent asks for it on every step of a form with an experience section.
+const expCache = new Map<string, ExpEntry[]>();
+async function getExperience(cv: string): Promise<ExpEntry[]> {
+  const body = splitCv(cv).body;
+  const hit = expCache.get(body);
+  if (hit) return hit;
+  const { masked } = maskContacts(body);
+  const r = await generateJson(
+    `Extrahiere aus dem Lebenslauf die Berufserfahrung (Jobs, Praktika, Werkstudentenstellen; keine Ausbildung) als Liste, neueste zuerst, höchstens ${MAX_EXPERIENCE} Einträge.
+Felder: title (Jobtitel), company, from und to als "MM/JJJJ" ("heute" falls laufend), description (höchstens 2 Sätze, nur Fakten aus dem Lebenslauf, Wortwahl übernehmen). Nichts erfinden, unbekannte Felder leer lassen.
+
+LEBENSLAUF (LaTeX-Body):
+${masked}`,
+    expJsonSchema, ExpSchema, { temperature: 0.1, lite: true },
+  );
+  const entries = r.entries.slice(0, MAX_EXPERIENCE);
+  expCache.set(body, entries);
+  return entries;
+}
+
 const describe = (e: AgentElement) =>
-  [`id=${e.id}`, `${e.kind}${e.type ? `/${e.type}` : ""}`, `label="${e.label}"`, e.required ? "Pflicht" : "", e.options?.length ? `Optionen: ${e.options.join(" | ")}` : ""].filter(Boolean).join(" ; ");
+  [`id=${e.id}`, `${e.kind}${e.type ? `/${e.type}` : ""}`, `label="${e.label}"`, e.required ? "Pflicht" : "", e.value ? `aktueller Wert="${e.value}"` : "", e.error ? `Seitenfehler="${e.error}" (bisheriger Wert wurde abgelehnt, liefere einen anderen)` : "", e.options?.length ? `Optionen: ${e.options.join(" | ")}` : ""].filter(Boolean).join(" ; ");
 
 async function askGemini(
   job: Job | undefined,
@@ -106,16 +142,19 @@ export async function agentStep(
   }
   const answered = new Set((input.answers ?? []).map((a) => a.id));
 
-  const m = mapFields(input.elements, profile, { done: [...done, ...answered], hasCover: ctx.hasCover });
+  const wantsExp = input.elements.some((e) => e.kind === "button" && EXP_SECTION_RE.test(e.section ?? "")) || done.some((d) => d.startsWith("exp:add:"));
+  const experience = wantsExp ? await getExperience(cv).catch(() => []) : undefined;
+  const m = mapFields(input.elements, profile, { done: [...done, ...answered], hasCover: ctx.hasCover, experience, attempts: input.attempts, pageText: input.text });
   actions.push(...m.actions);
   let unresolved = m.unresolved;
+  const repair = m.repair;
 
   let clickId: string | undefined;
   const needNav = !m.hasForm && !m.entryId && !m.nextId;
-  if (unresolved.length || needNav) {
+  if (unresolved.length || repair.length || needNav) {
     // Fields without any label would be guessed blindly, and fields whose profile key is known but empty need the user, not a guess.
     const blind = unresolved.filter((e) => !e.label?.trim() || keyFor(e));
-    const askable = unresolved.filter((e) => !blind.includes(e));
+    const askable = [...unresolved.filter((e) => !blind.includes(e)), ...repair];
     const buttons = needNav ? input.elements.filter((e) => (e.kind === "button" || e.kind === "link") && !SUBMIT_RE.test(e.label)).slice(0, 40) : undefined;
     const still: AgentElement[] = [...blind];
     if (askable.length || needNav) {
@@ -147,12 +186,15 @@ export async function agentStep(
   if (actions.length) return { status: "continue", actions, learned };
 
   // Only required fields we could not fill ask the user; optional free-text questions are simply skipped.
-  const blocking = unresolved.find((e) => e.required);
+  const blocking = unresolved.find((e) => e.required || e.invalid);
   if (blocking) {
-    return { status: "ask", actions: [], question: { id: blocking.id, label: blocking.label || blocking.placeholder || blocking.name || blocking.type || blocking.id, options: blocking.options }, learned };
+    const label = blocking.label || blocking.placeholder || blocking.name || blocking.type || blocking.id;
+    return { status: "ask", actions: [], question: { id: blocking.id, label: blocking.error ? `${label} (Seite meldet: ${blocking.error})` : label, options: blocking.options }, learned };
   }
   if (m.hasForm) {
-    if (m.nextId && !done.includes(m.nextId)) return { status: "continue", actions: [{ type: "click", id: m.nextId, label: "Weiter" }], learned };
+    // "Weiter" may be clicked again when the page did not move on (the fields are repaired in between); at most 3 times per page state
+    const sig = `next:${input.url}|${input.elements.filter((e) => e.kind === "field" || e.kind === "file").map((e) => e.label).join("|")}`;
+    if (m.nextId && done.filter((d) => d === sig).length < 3) return { status: "continue", actions: [{ type: "click", id: m.nextId, label: "Weiter", mark: sig }], learned };
     if (m.submitId) return { status: "ready_to_submit", actions: [], submitId: m.submitId, learned };
     return { status: "need_user", actions: [], message: "Kein Absenden-Button gefunden. Prüfe die Seite und mach selbst weiter.", learned };
   }

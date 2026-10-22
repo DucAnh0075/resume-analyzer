@@ -18,8 +18,10 @@
     <div><b class="label">Stadt *</b>
       <div style="position:relative"><input id="city" role="combobox" aria-autocomplete="list" aria-controls="cities" required autocomplete="off" />
       <ul id="cities" role="listbox" hidden style="position:absolute;margin:0;padding:0;list-style:none;background:#fff;border:1px solid #ccc;width:100%"></ul></div></div>
+    <section><h2 style="font-size:1rem;margin:1rem 0 .2rem">Einfach Bewerben</h2>
+      <div class="dropzone" style="border:2px dashed #38f;padding:1rem;text-align:center">Parser <input type="file" hidden /></div></section>
     <section><h2 style="font-size:1rem;margin:1rem 0 .2rem">Lebenslauf *</h2>
-      <div style="border:2px dashed #38f;padding:1rem;text-align:center"><label style="margin:0">Eine Datei auswählen <input id="cv" type="file" required hidden /></label> oder hier ablegen</div></section>
+      <div><div><div><div class="dropzone" id="dz" style="border:2px dashed #38f;padding:1rem;text-align:center">Datei hier ablegen (nur Drop) <input id="cv" type="file" hidden /> <span id="dzname"></span></div></div></div></div></section>
     <label for="cl">Anschreiben</label><input id="cl" type="file" />
     <label for="why">Warum möchten Sie bei uns arbeiten? *</label><textarea id="why" rows="4" required></textarea>
     <label class="check"><input type="checkbox" required /> Ich habe die Datenschutzerklärung gelesen und stimme zu *</label>
@@ -35,6 +37,10 @@
       list.hidden = !city.value;
     });
     list.addEventListener("click", (e) => { city.value = e.target.textContent; city.setCustomValidity(""); list.hidden = true; });
+    // dropzone only reacts to drop events, not to the input's change event
+    const dz = document.getElementById("dz");
+    dz.addEventListener("dragover", (e) => e.preventDefault());
+    dz.addEventListener("drop", (e) => { e.preventDefault(); document.getElementById("dzname").textContent = e.dataTransfer.files[0]?.name ?? ""; });
     document.getElementById("f").addEventListener("submit", (e) => {
       e.preventDefault();
       document.body.innerHTML = "<h1>Vielen Dank für Ihre Bewerbung</h1><p>Ihre Bewerbung ist eingegangen. (Testformular, nichts wurde gesendet)</p>";

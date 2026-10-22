@@ -25,6 +25,11 @@
     }
   }
 
+  const deepQueryAll = (sel) => { const out = []; for (const r of roots()) out.push(...r.querySelectorAll(sel)); return out; };
+  const deepText = () => { let t = ""; for (const r of roots()) t += " " + (r.body?.innerText ?? r.innerText ?? r.textContent ?? ""); return clean(t); };
+  // trusted input (chrome.debugger in background.js); resolves {ok:false} when unavailable so callers can fall back
+  const bg = (msg) => new Promise((res) => { try { chrome.runtime.sendMessage(msg, (r) => res(r || { ok: false })); } catch { res({ ok: false }); } });
+
   const LABEL_SEL = "label, legend, h1, h2, h3, h4, [class*=label i]";
   // Closest preceding label/heading in the surrounding containers (up to 4 levels), ignoring those that belong to other fields.
   function nearbyLabel(el) {
@@ -35,6 +40,30 @@
       if (hits.length) return clean(hits[hits.length - 1].innerText);
     }
     return "";
+  }
+
+  // Nearest short heading/label before el in document order, however far up the tree it sits (e.g. "Lebenslauf *" above a hidden file input).
+  const HEAD_SEL = "h1, h2, h3, h4, h5, h6, [role=heading], legend, label, [class*=title i], [class*=label i], [class*=header i]";
+  // The last n of them, because the closest one is often only a hint text ("10MB Größenbeschränkung").
+  function headingsBefore(el, n = 1) {
+    const doc = el.ownerDocument;
+    const walker = doc.createTreeWalker(doc.body || doc, NodeFilter.SHOW_ELEMENT);
+    const found = [];
+    for (let x = walker.nextNode(), i = 0; x && x !== el && i < 20000; x = walker.nextNode(), i++) {
+      if (!x.matches(HEAD_SEL) || x.contains(el) || x.querySelector("input, select, textarea")) continue;
+      const t = clean(x.innerText);
+      if (t && t.length < 80 && found[found.length - 1] !== t) found.push(t);
+    }
+    return found.slice(-n).join(" ");
+  }
+  const headingBefore = (el) => headingsBefore(el, 1);
+
+  // Visible error text belonging to a control: climbs while the container still holds only this one control.
+  function errorOf(el) {
+    let box = el.parentElement;
+    for (let up = 0; box?.parentElement && up < 5 && box.parentElement.querySelectorAll("input, select, textarea").length <= 1; up++) box = box.parentElement;
+    const t = box && [...box.querySelectorAll("[role=alert], [class*=error i]")].filter(visible).map((n) => clean(n.innerText)).find(Boolean);
+    return t || (el.getAttribute("aria-invalid") === "true" ? "ungültig" : "");
   }
 
   function labelOf(el) {
@@ -59,7 +88,12 @@
     return el.dataset.raId;
   };
 
-  const isCombo = (el) => el.getAttribute("role") === "combobox" || el.hasAttribute("aria-autocomplete") || el.hasAttribute("list") || el.getAttribute("aria-haspopup") === "listbox";
+  const isCombo = (el) =>
+    el.getAttribute("role") === "combobox" || el.hasAttribute("aria-autocomplete") || el.hasAttribute("list") || el.hasAttribute("aria-expanded") ||
+    el.getAttribute("aria-haspopup") === "listbox" || !!el.closest("[role=combobox]") ||
+    !!el.parentElement?.querySelector(":scope > [class*=search i], :scope > button svg, :scope > svg");
+
+  const withError = (o, el) => { const error = errorOf(el); return error ? { ...o, invalid: true, error } : o; };
 
   function snapshot() {
     registry.clear();
@@ -78,8 +112,14 @@
           }
           if (type !== "file" && !visible(el)) continue;
           if (el.disabled) continue;
-          const required = el.required || el.getAttribute("aria-required") === "true";
-          if (type === "file") { elements.push({ id: idOf(el), kind: "file", type: "file", label: clean(`${nearbyLabel(el)} ${labelOf(el)}`), name: el.name, required, value: el.files?.length ? el.files[0].name : undefined }); continue; }
+          let required = el.required || el.getAttribute("aria-required") === "true";
+          if (type === "file") {
+            const label = clean(`${headingsBefore(el, 3)} ${nearbyLabel(el)} ${labelOf(el)}`);
+            console.debug("[ra] file input", { label, hidden: !visible(el), disabled: el.disabled, inShadow: el.getRootNode() !== document });
+            elements.push(withError({ id: idOf(el), kind: "file", type: "file", label, name: el.name, required: required || /\*/.test(label), value: el.files?.length ? el.files[0].name : undefined }, el));
+            continue;
+          }
+          if (/\*\s*$/.test(labelOf(el))) required = true;
           if (type === "radio") {
             const key = (el.name || "") + "|" + (el.form ? [...document.forms].indexOf(el.form) : "");
             const opt = clean(labelOf(el)) || el.value;
@@ -92,20 +132,21 @@
             continue;
           }
           if (type === "checkbox") { elements.push({ id: idOf(el), kind: "field", type: "checkbox", label: labelOf(el), name: el.name, required, checked: el.checked }); continue; }
-          elements.push({ id: idOf(el), kind: "field", type, label: labelOf(el), name: el.name, autocomplete: el.autocomplete, placeholder: el.placeholder, required, value: el.value, combobox: isCombo(el) });
+          elements.push(withError({ id: idOf(el), kind: "field", type, label: labelOf(el), name: el.name, autocomplete: el.autocomplete, placeholder: el.placeholder, required, value: el.value, combobox: isCombo(el) }, el));
         } else if (tag === "TEXTAREA" || tag === "SELECT") {
           if (!visible(el) || el.disabled) continue;
           const required = el.required || el.getAttribute("aria-required") === "true";
           if (tag === "SELECT") {
             const opts = [...el.options].filter((o) => o.value !== "" && clean(o.text));
             const sel = el.selectedOptions[0];
-            elements.push({ id: idOf(el), kind: "field", type: "select", label: labelOf(el), name: el.name, autocomplete: el.autocomplete, required, options: opts.map((o) => clean(o.text)), value: sel && sel.value !== "" ? clean(sel.text) : "" });
-          } else elements.push({ id: idOf(el), kind: "field", type: "textarea", label: labelOf(el), name: el.name, placeholder: el.placeholder, required, value: el.value });
+            elements.push(withError({ id: idOf(el), kind: "field", type: "select", label: labelOf(el), name: el.name, autocomplete: el.autocomplete, required, options: opts.map((o) => clean(o.text)), value: sel && sel.value !== "" ? clean(sel.text) : "" }, el));
+          } else elements.push(withError({ id: idOf(el), kind: "field", type: "textarea", label: labelOf(el), name: el.name, placeholder: el.placeholder, required, value: el.value }, el));
         } else if (visible(el)) {
           const label = clean(el.innerText || el.getAttribute("aria-label") || el.title);
           if (!label || label.length > 80) continue;
           const isBtn = tag === "BUTTON" || el.getAttribute("role") === "button";
-          elements.push({ id: idOf(el), kind: isBtn ? "button" : "link", label, submit: tag === "BUTTON" && (el.type === "submit" || (!el.getAttribute("type") && !!el.form)) });
+          const section = isBtn && /^\+?\s*(hinzuf(ü|ue)gen|add)\b/i.test(label) ? headingBefore(el) : undefined;
+          elements.push({ id: idOf(el), kind: isBtn ? "button" : "link", label, section, submit: tag === "BUTTON" && (el.type === "submit" || (!el.getAttribute("type") && !!el.form)) });
         }
       }
     }
@@ -134,21 +175,57 @@
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // Autocomplete inputs only accept a suggestion that was clicked, typing alone leaves the field invalid.
+  const setValue = (el, v) => Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v);
+
+  // Suggestion lists often load on real key events only: type via the debugger (trusted), else character by character with synthetic events.
+  async function typeInto(el, value) {
+    el.focus();
+    setValue(el, "");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    if ((await bg({ cmd: "cdpType", text: value })).ok) return;
+    for (const ch of value) {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: ch, bubbles: true }));
+      setValue(el, el.value + ch);
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: ch }));
+      el.dispatchEvent(new KeyboardEvent("keyup", { key: ch, bubbles: true }));
+      await sleep(40);
+    }
+  }
+
+  const invalid = (el) => (el.willValidate && !el.checkValidity()) || !!errorOf(el);
+
+  const OPT_SEL = "[role=option], [role=listbox] li, [class*=suggest i] li, [class*=autocomplete i] li, [class*=dropdown i] li, li[class*=item i]";
+
+  // Autocomplete inputs only accept a suggestion that was clicked (or chosen with the keyboard), typing alone leaves the field invalid.
   async function pickSuggestion(el, value) {
     el.focus();
-    const owner = el.getAttribute("aria-controls") || el.getAttribute("aria-owns");
-    for (let i = 0; i < 6; i++) {
+    const w = value.toLowerCase();
+    for (let i = 0; i < 12; i++) {
       await sleep(250);
-      const list = (owner && el.ownerDocument.getElementById(owner)) || el.ownerDocument;
-      const opts = [...list.querySelectorAll("[role=option], [role=listbox] li, [class*=suggestion i], [class*=option i]")].filter(visible);
+      const box = el.getBoundingClientRect();
+      // only suggestions that sit just below the input; the page may contain unrelated dropdowns (also in shadow roots)
+      const opts = deepQueryAll(OPT_SEL).filter((o) => {
+        if (!visible(o) || !clean(o.innerText)) return false;
+        const r = o.getBoundingClientRect();
+        return r.top >= box.bottom - 6 && r.top - box.bottom < 450 && r.left < box.right && r.right > box.left;
+      });
       if (!opts.length) continue;
-      const w = value.toLowerCase();
       const opt = opts.find((o) => clean(o.innerText).toLowerCase().startsWith(w)) ?? opts.find((o) => clean(o.innerText).toLowerCase().includes(w)) ?? opts[0];
-      for (const t of ["mousedown", "mouseup", "click"]) opt.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true }));
+      opt.scrollIntoView({ block: "nearest" });
+      const r = opt.getBoundingClientRect();
+      if (!(await bg({ cmd: "cdpClick", x: r.left + r.width / 2, y: r.top + r.height / 2 })).ok) {
+        for (const t of ["mousedown", "mouseup", "click"]) opt.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true }));
+      }
+      await sleep(300);
       return true;
     }
-    return false;
+    // no list found: choose the first suggestion with the keyboard
+    el.focus();
+    if (!(await bg({ cmd: "cdpKey", key: "ArrowDown" })).ok) return false;
+    await sleep(200);
+    await bg({ cmd: "cdpKey", key: "Enter" });
+    await sleep(300);
+    return !!clean(el.value);
   }
 
   async function perform(a, files, allowSubmit) {
@@ -157,8 +234,19 @@
     el.scrollIntoView({ block: "center" });
     try {
       if (a.type === "fill") {
-        setNative(el, a.value); mark(el, a.generated);
-        if (isCombo(el) && !(await pickSuggestion(el, a.value))) return { id: a.id, ok: true, note: "Kein Vorschlag gefunden" };
+        if (el.tagName === "INPUT" && isCombo(el)) {
+          const orig = el.value;
+          let ok = false;
+          for (const v of [a.value, ...(a.fallback || [])]) {
+            await typeInto(el, v);
+            if ((await pickSuggestion(el, v)) && clean(el.value) && !invalid(el)) { ok = true; break; }
+          }
+          if (!ok) { setValue(el, orig); el.dispatchEvent(new Event("input", { bubbles: true })); return { id: a.id, ok: false, note: "Kein Vorschlag gefunden" }; }
+          mark(el, a.generated);
+          el.dispatchEvent(new Event("blur", { bubbles: true }));
+        } else { setNative(el, a.value); mark(el, a.generated); }
+        await sleep(300);
+        if (invalid(el)) return { id: a.id, ok: false, note: "Feld ungültig, bitte Vorschlag auswählen" };
       }
       else if (a.type === "select") {
         if (el.tagName === "SELECT") {
@@ -179,6 +267,14 @@
         el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true }));
         el.dataset.raFile = f.name;
         mark(el.closest("label") || el);
+        const shown = async () => { await sleep(1200); return deepText().includes(f.name); };
+        if (!(await shown())) {
+          // dropzones that ignore the input's change event: replay the file as a drop on the zone
+          let zone = el.closest("[class*=drop i], [class*=upload i]");
+          for (let p = el.parentElement, i = 0; !zone && p && i < 3; p = p.parentElement, i++) zone = p;
+          for (const t of ["dragenter", "dragover", "drop"]) zone.dispatchEvent(new DragEvent(t, { bubbles: true, cancelable: true, dataTransfer: dt }));
+          if (!(await shown())) return { id: a.id, ok: false, note: "Upload nicht bestätigt" };
+        }
       } else if (a.type === "click") {
         const text = clean(el.innerText || el.value || el.getAttribute("aria-label"));
         if (!allowSubmit && SUBMIT_RE.test(text)) return { id: a.id, ok: false, blocked: true, note: "Absenden ohne Bestätigung blockiert" };
@@ -235,7 +331,7 @@
       box.innerHTML = `<h3>${esc(msg.title || "Agent")}</h3><p>${esc(msg.text)}</p><div class="row"><button id="ok">Schließen</button></div>`;
       root.getElementById("ok").onclick = () => host.remove();
     } else if (msg.mode === "need_user") {
-      box.innerHTML = `<h3>Dein Einsatz</h3><p>${esc(msg.text)}</p><div class="row"><button class="primary" id="go">Erledigt, weiter</button><button class="danger" id="no">Abbrechen</button></div>`;
+      box.innerHTML = `<h3>Dein Einsatz</h3><p style="white-space:pre-line">${esc(msg.text)}</p><div class="row"><button class="primary" id="go">Erledigt, weiter</button><button class="danger" id="no">Abbrechen</button></div>`;
       root.getElementById("go").onclick = () => { decide({ decision: "resume" }); show({ mode: "progress", text: "Mache weiter…" }); };
       root.getElementById("no").onclick = () => { decide({ decision: "cancel" }); host.remove(); };
     } else if (msg.mode === "ask") {
@@ -266,7 +362,19 @@
 
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg.cmd === "ping") reply({ ok: true });
-    else if (msg.cmd === "snapshot") reply(snapshot());
+    else if (msg.cmd === "snapshot") { const snap = snapshot(); console.debug("[ra] elements", snap.elements.map((e) => `${e.kind}/${e.type || ""} ${e.label}`)); reply(snap); }
+    else if (msg.cmd === "rect") {
+      // where to click so the page opens its own file dialog: the "choose file" link inside the dropzone, else the zone itself
+      const el = registry.get(msg.id);
+      let zone = el && (el.closest("label, [class*=drop i], [class*=upload i]") || el.parentElement);
+      for (let i = 0; zone && !visible(zone) && i < 4; i++) zone = zone.parentElement;
+      const pick = zone && ([...zone.querySelectorAll("a, button, span, label, div")].filter((n) => visible(n) && /ausw(ä|ae)hlen|durchsuchen|browse|choose|hochladen|upload/i.test(clean(n.innerText)) && clean(n.innerText).length < 60).pop() || zone);
+      if (!pick) { reply({ ok: false }); return; }
+      pick.scrollIntoView({ block: "center" });
+      const r = pick.getBoundingClientRect();
+      reply({ ok: true, x: r.left + Math.min(r.width / 2, 120), y: r.top + r.height / 2 });
+    }
+    else if (msg.cmd === "hasText") reply({ ok: deepText().includes(msg.text) });
     else if (msg.cmd === "act") {
       (async () => {
         const results = [];

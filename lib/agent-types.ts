@@ -12,14 +12,17 @@ export interface AgentElement {
   checked?: boolean;
   submit?: boolean; // button that submits a form
   combobox?: boolean; // autocomplete input: a suggestion has to be clicked
+  invalid?: boolean; // the page shows an error for this field
+  error?: string;
+  section?: string; // nearest heading above an "add" button, e.g. "Berufserfahrung"
 }
 
 export type AgentAction =
-  | { type: "fill"; id: string; value: string; label?: string; generated?: boolean }
+  | { type: "fill"; id: string; value: string; label?: string; generated?: boolean; fallback?: string[] }
   | { type: "select"; id: string; option: string; label?: string }
   | { type: "check"; id: string; checked: boolean; label?: string }
   | { type: "upload"; id: string; doc: "cv" | "cover"; label?: string }
-  | { type: "click"; id: string; label?: string };
+  | { type: "click"; id: string; label?: string; mark?: string };
 
 export interface AgentStepInput {
   jobId?: string;
@@ -29,6 +32,8 @@ export interface AgentStepInput {
   elements: AgentElement[];
   /** ids the agent already tried; never acted on twice */
   done?: string[];
+  /** how often each element was acted on; invalid fields are retried with a different strategy up to 3 times */
+  attempts?: Record<string, number>;
   /** user answers to an earlier `ask` */
   answers?: { id: string; label: string; value: string; remember?: boolean }[];
 }
@@ -41,4 +46,12 @@ export interface AgentStepResult {
   message?: string;
   submitId?: string;
   question?: { id: string; label: string; options?: string[] };
+}
+
+export interface ExpEntry {
+  title: string;
+  company: string;
+  from: string;
+  to: string;
+  description: string;
 }

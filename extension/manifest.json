@@ -6,7 +6,9 @@
   "permissions": [
     "scripting",
     "tabs",
-    "storage"
+    "storage",
+    "debugger",
+    "downloads"
   ],
   "host_permissions": [
     "<all_urls>"
