@@ -51,7 +51,9 @@ Die App läuft dann auf http://localhost:3000. Ein Beispiel-CV liegt in `example
 
 Der Agent öffnet die Seite, klickt sich zum Formular durch, trägt Daten ein, lädt CV und Anschreiben hoch und geht mehrstufige Formulare durch. **Abgesendet wird erst nach deiner Bestätigung** in der Zusammenfassung. Danach landet die Bewerbung im Bewerbungsstand. Standardfelder werden ohne AI-Aufruf ausgefüllt, Gemini bekommt nur die offenen Felder (Free-Tier-schonend, Agent-Schritte laufen auf `GEMINI_MODEL_LITE`, Standard `gemini-3.5-flash-lite`, fällt bei Abkündigung auf `GEMINI_MODEL` zurück). Deine Kontaktdaten gehen nie an Gemini.
 
-Grenzen: Bei Login, Captcha oder Account-Anlage pausiert der Agent und wartet auf dich. LinkedIn „Easy Apply“ wird bewusst nicht automatisiert. Eigene Auswahlfelder ohne echtes `<select>` oder Formulare in fremden iframes können Handarbeit brauchen. Zum gefahrlosen Ausprobieren gibt es ein Testformular unter http://localhost:3000/test-form.html (sendet nichts).
+Wie der Agent Felder erkennt: Beschriftungen kommen aus `<label>`, `aria-label` oder, wenn beides fehlt, aus dem nächsten Label oder der nächsten Überschrift davor (so wird auch eine Dropzone unter „Lebenslauf“ erkannt). Jedes Dokument lädt er pro Lauf nur einmal hoch. Datumswerte aus dem Profil (`TT.MM.JJJJ`) wandelt er für Datumsfelder um. Autocomplete-Felder (z. B. Stadt) füllt er und klickt den passenden Vorschlag an. Felder ohne Beschriftung und Felder, deren Profilwert fehlt, rät er nicht, sondern fragt dich.
+
+Grenzen: Bei Login, Captcha oder Account-Anlage pausiert der Agent und wartet auf dich. LinkedIn „Easy Apply“ wird bewusst nicht automatisiert. Eigene Auswahlfelder ohne echtes `<select>`, Datumsfelder aus drei getrennten Auswahlfeldern oder Formulare in fremden iframes können Handarbeit brauchen. Wenn eine Seite nicht klappt, im Popup „Seitenanalyse kopieren“ wählen: Das kopiert, welche Felder (Beschriftungen und Typen, keine Werte) der Agent sieht. Zum gefahrlosen Ausprobieren gibt es ein Testformular unter http://localhost:3000/test-form.html (sendet nichts).
 
 ## Befehle
 

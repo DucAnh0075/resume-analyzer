@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { AgentAction, AgentElement, AgentStepInput, AgentStepResult } from "./agent-types";
-import { mapFields, pickOption, profileValue, SUBMIT_RE } from "./fieldmap";
+import { forInput, keyFor, mapFields, pickOption, profileValue, SUBMIT_RE } from "./fieldmap";
 import { generateJson } from "./gemini";
 import { maskContacts, splitCv } from "./latex";
 import type { Job, Profile } from "./types";
@@ -8,6 +8,9 @@ import type { Job, Profile } from "./types";
 const CONFIRMED_RE = /vielen dank f(ü|ue)r (ihre|deine) bewerbung|thank you for (applying|your application)|bewerbung (wurde )?(erfolgreich )?(eingegangen|gesendet|(ü|ue)bermittelt)|application (has been |was )?(received|submitted|sent)/i;
 const CAPTCHA_RE = /captcha|ich bin kein roboter|i'?m not a robot|verify you are human/i;
 const EASY_APPLY_RE = /easy apply|einfach bewerben/i;
+
+const DATE_KEYS = new Set(["birthDate", "earliestStart"]);
+const DATE_HINT_RE = /datum|date|geburt|birth|eintritt|start|verf(ü|ue)gbar|available|tt\.mm|dd\/mm/i;
 
 const PROFILE_KEYS = [
   "firstName", "lastName", "fullName", "email", "phone", "street", "zip", "city", "country", "birthDate", "nationality", "workPermit",
@@ -110,27 +113,35 @@ export async function agentStep(
   let clickId: string | undefined;
   const needNav = !m.hasForm && !m.entryId && !m.nextId;
   if (unresolved.length || needNav) {
+    // Fields without any label would be guessed blindly, and fields whose profile key is known but empty need the user, not a guess.
+    const blind = unresolved.filter((e) => !e.label?.trim() || keyFor(e));
+    const askable = unresolved.filter((e) => !blind.includes(e));
     const buttons = needNav ? input.elements.filter((e) => (e.kind === "button" || e.kind === "link") && !SUBMIT_RE.test(e.label)).slice(0, 40) : undefined;
-    const r = await askGemini(job, cv, profile, unresolved, buttons, input.text);
-    const still: AgentElement[] = [];
-    for (const e of unresolved) {
-      const x = r.results.find((y) => y.id === e.id);
-      const label = e.label || e.name || e.id;
-      if (!x || x.action === "skip") { still.push(e); continue; }
-      if (x.action === "check") { actions.push({ type: "check", id: e.id, checked: x.value === "true", label }); continue; }
-      if (x.action === "select") {
-        const opt = pickOption(e.options, x.value);
-        if (opt) actions.push({ type: "select", id: e.id, option: opt, label });
+    const still: AgentElement[] = [...blind];
+    if (askable.length || needNav) {
+      const r = await askGemini(job, cv, profile, askable, buttons, input.text);
+      for (const e of askable) {
+        const x = r.results.find((y) => y.id === e.id);
+        const label = e.label || e.name || e.id;
+        if (!x || x.action === "skip") { still.push(e); continue; }
+        if (x.action === "check") { actions.push({ type: "check", id: e.id, checked: x.value === "true", label }); continue; }
+        if (x.action === "select") {
+          const opt = pickOption(e.options, x.value);
+          if (opt) actions.push({ type: "select", id: e.id, option: opt, label });
+          else still.push(e);
+          continue;
+        }
+        const key = x.profileKey && (PROFILE_KEYS as readonly string[]).includes(x.profileKey) ? (x.profileKey as (typeof PROFILE_KEYS)[number]) : undefined;
+        // a date from the profile only goes into something that looks like a date field
+        if (key && DATE_KEYS.has(key) && e.type !== "date" && !DATE_HINT_RE.test(`${e.label} ${e.name ?? ""} ${e.placeholder ?? ""}`)) { still.push(e); continue; }
+        const fromProfile = key ? forInput(e, profileValue(profile, key)) : "";
+        const value = fromProfile || x.value.trim();
+        if (value) actions.push({ type: "fill", id: e.id, value, label, generated: !fromProfile });
         else still.push(e);
-        continue;
       }
-      const fromProfile = x.profileKey && (PROFILE_KEYS as readonly string[]).includes(x.profileKey) ? profileValue(profile, x.profileKey as (typeof PROFILE_KEYS)[number]) : "";
-      const value = fromProfile || x.value.trim();
-      if (value) actions.push({ type: "fill", id: e.id, value, label, generated: !fromProfile });
-      else still.push(e);
+      if (r.clickId && input.elements.some((e) => e.id === r.clickId)) clickId = r.clickId;
     }
     unresolved = still;
-    if (r.clickId && input.elements.some((e) => e.id === r.clickId)) clickId = r.clickId;
   }
 
   if (actions.length) return { status: "continue", actions, learned };
@@ -138,7 +149,7 @@ export async function agentStep(
   // Only required fields we could not fill ask the user; optional free-text questions are simply skipped.
   const blocking = unresolved.find((e) => e.required);
   if (blocking) {
-    return { status: "ask", actions: [], question: { id: blocking.id, label: blocking.label || blocking.name || blocking.id, options: blocking.options }, learned };
+    return { status: "ask", actions: [], question: { id: blocking.id, label: blocking.label || blocking.placeholder || blocking.name || blocking.type || blocking.id, options: blocking.options }, learned };
   }
   if (m.hasForm) {
     if (m.nextId && !done.includes(m.nextId)) return { status: "continue", actions: [{ type: "click", id: m.nextId, label: "Weiter" }], learned };

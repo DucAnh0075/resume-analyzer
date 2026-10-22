@@ -24,6 +24,16 @@ async function init() {
     $("msg").textContent = r?.ok ? "Agent läuft, schau auf die Seite." : r?.error || "Fehler";
     if (r?.ok) window.close();
   };
+  // What the agent sees on this page (labels and types only, no values) for bug reports.
+  $("dump").onclick = async () => {
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
+      const snap = await chrome.tabs.sendMessage(tab.id, { cmd: "snapshot" });
+      const view = snap.elements.map(({ kind, type, label, name, required, combobox, options }) => ({ kind, type, label, name, required, combobox, options }));
+      await navigator.clipboard.writeText(JSON.stringify({ url: snap.url, elements: view }, null, 1));
+      $("msg").textContent = `${view.length} Elemente kopiert.`;
+    } catch (e) { $("msg").textContent = String(e.message || e); }
+  };
   $("applied").onclick = async () => {
     const r = await fetch(`${BASE}/api/agent/done`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: $("job").value }) });
     $("msg").textContent = r.ok ? "Im Bewerbungsstand eingetragen." : "Fehler";

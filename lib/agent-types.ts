@@ -11,6 +11,7 @@ export interface AgentElement {
   value?: string;
   checked?: boolean;
   submit?: boolean; // button that submits a form
+  combobox?: boolean; // autocomplete input: a suggestion has to be clicked
 }
 
 export type AgentAction =

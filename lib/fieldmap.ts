@@ -46,13 +46,13 @@ export function profileValue(p: Profile, key: TextKey): string {
 }
 
 /** <input type="date"> only accepts YYYY-MM-DD; the profile holds what the user typed (usually 31.12.1999). */
-function forInput(e: AgentElement, v: string): string {
+export function forInput(e: AgentElement, v: string): string {
   if (e.type !== "date") return v;
   const m = v.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
   return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : v;
 }
 
-function keyFor(e: AgentElement): TextKey | undefined {
+export function keyFor(e: AgentElement): TextKey | undefined {
   const ac = e.autocomplete?.split(/\s+/).pop()?.toLowerCase();
   if (ac && AUTOCOMPLETE[ac]) return AUTOCOMPLETE[ac];
   if (e.type === "email") return "email";

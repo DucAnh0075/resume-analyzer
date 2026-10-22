@@ -15,7 +15,11 @@
     <label for="ph">Telefon</label><input id="ph" type="tel" />
     <label for="co">Land</label>
     <select id="co"><option value="">Bitte wählen</option><option>Deutschland</option><option>Österreich</option><option>Schweiz</option></select>
-    <label for="cv">Lebenslauf *</label><input id="cv" type="file" required />
+    <div><b class="label">Stadt *</b>
+      <div style="position:relative"><input id="city" role="combobox" aria-autocomplete="list" aria-controls="cities" required autocomplete="off" />
+      <ul id="cities" role="listbox" hidden style="position:absolute;margin:0;padding:0;list-style:none;background:#fff;border:1px solid #ccc;width:100%"></ul></div></div>
+    <section><h2 style="font-size:1rem;margin:1rem 0 .2rem">Lebenslauf *</h2>
+      <div style="border:2px dashed #38f;padding:1rem;text-align:center"><label style="margin:0">Eine Datei auswählen <input id="cv" type="file" required hidden /></label> oder hier ablegen</div></section>
     <label for="cl">Anschreiben</label><input id="cl" type="file" />
     <label for="why">Warum möchten Sie bei uns arbeiten? *</label><textarea id="why" rows="4" required></textarea>
     <label class="check"><input type="checkbox" required /> Ich habe die Datenschutzerklärung gelesen und stimme zu *</label>
@@ -23,6 +27,14 @@
     <button type="submit" style="margin-top:1rem;padding:.5rem 1rem">Bewerbung absenden</button>
   </form>
   <script>
+    // simple autocomplete: typing shows suggestions, the field is only valid once one was clicked
+    const city = document.getElementById("city"), list = document.getElementById("cities");
+    city.addEventListener("input", () => {
+      city.setCustomValidity("Bitte einen Vorschlag wählen");
+      list.innerHTML = ["", " (Landkreis Harburg)", " (Hessen)"].map((x) => `<li role="option" style="padding:.3rem;cursor:pointer">${city.value}${x}</li>`).join("");
+      list.hidden = !city.value;
+    });
+    list.addEventListener("click", (e) => { city.value = e.target.textContent; city.setCustomValidity(""); list.hidden = true; });
     document.getElementById("f").addEventListener("submit", (e) => {
       e.preventDefault();
       document.body.innerHTML = "<h1>Vielen Dank für Ihre Bewerbung</h1><p>Ihre Bewerbung ist eingegangen. (Testformular, nichts wurde gesendet)</p>";

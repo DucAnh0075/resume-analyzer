@@ -25,6 +25,18 @@
     }
   }
 
+  const LABEL_SEL = "label, legend, h1, h2, h3, h4, [class*=label i]";
+  // Closest preceding label/heading in the surrounding containers (up to 4 levels), ignoring those that belong to other fields.
+  function nearbyLabel(el) {
+    let box = el.parentElement;
+    for (let i = 0; i < 4 && box; i++, box = box.parentElement) {
+      const hits = [...box.querySelectorAll(LABEL_SEL)].filter((c) =>
+        !c.contains(el) && !c.querySelector("input, select, textarea") && (el.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_PRECEDING) && clean(c.innerText) && clean(c.innerText).length < 80);
+      if (hits.length) return clean(hits[hits.length - 1].innerText);
+    }
+    return "";
+  }
+
   function labelOf(el) {
     const doc = el.ownerDocument;
     const parts = [];
@@ -36,6 +48,7 @@
     if (!clean(parts.join(""))) {
       const group = el.closest("fieldset"); if (group?.querySelector("legend")) parts.push(group.querySelector("legend").innerText);
       const prev = el.previousElementSibling; if (prev && prev.innerText && prev.innerText.length < 120) parts.push(prev.innerText);
+      if (!clean(parts.join(""))) parts.push(nearbyLabel(el));
     }
     return clean(parts.find((p) => clean(p)) || el.placeholder || el.name || "");
   }
@@ -45,6 +58,8 @@
     registry.set(el.dataset.raId, el);
     return el.dataset.raId;
   };
+
+  const isCombo = (el) => el.getAttribute("role") === "combobox" || el.hasAttribute("aria-autocomplete") || el.hasAttribute("list") || el.getAttribute("aria-haspopup") === "listbox";
 
   function snapshot() {
     registry.clear();
@@ -64,7 +79,7 @@
           if (type !== "file" && !visible(el)) continue;
           if (el.disabled) continue;
           const required = el.required || el.getAttribute("aria-required") === "true";
-          if (type === "file") { elements.push({ id: idOf(el), kind: "file", type: "file", label: labelOf(el), name: el.name, required, value: el.files?.length ? el.files[0].name : undefined }); continue; }
+          if (type === "file") { elements.push({ id: idOf(el), kind: "file", type: "file", label: clean(`${nearbyLabel(el)} ${labelOf(el)}`), name: el.name, required, value: el.files?.length ? el.files[0].name : undefined }); continue; }
           if (type === "radio") {
             const key = (el.name || "") + "|" + (el.form ? [...document.forms].indexOf(el.form) : "");
             const opt = clean(labelOf(el)) || el.value;
@@ -77,7 +92,7 @@
             continue;
           }
           if (type === "checkbox") { elements.push({ id: idOf(el), kind: "field", type: "checkbox", label: labelOf(el), name: el.name, required, checked: el.checked }); continue; }
-          elements.push({ id: idOf(el), kind: "field", type, label: labelOf(el), name: el.name, autocomplete: el.autocomplete, placeholder: el.placeholder, required, value: el.value });
+          elements.push({ id: idOf(el), kind: "field", type, label: labelOf(el), name: el.name, autocomplete: el.autocomplete, placeholder: el.placeholder, required, value: el.value, combobox: isCombo(el) });
         } else if (tag === "TEXTAREA" || tag === "SELECT") {
           if (!visible(el) || el.disabled) continue;
           const required = el.required || el.getAttribute("aria-required") === "true";
@@ -117,12 +132,34 @@
     return new File([bytes], name, { type });
   }
 
-  function perform(a, files, allowSubmit) {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Autocomplete inputs only accept a suggestion that was clicked, typing alone leaves the field invalid.
+  async function pickSuggestion(el, value) {
+    el.focus();
+    const owner = el.getAttribute("aria-controls") || el.getAttribute("aria-owns");
+    for (let i = 0; i < 6; i++) {
+      await sleep(250);
+      const list = (owner && el.ownerDocument.getElementById(owner)) || el.ownerDocument;
+      const opts = [...list.querySelectorAll("[role=option], [role=listbox] li, [class*=suggestion i], [class*=option i]")].filter(visible);
+      if (!opts.length) continue;
+      const w = value.toLowerCase();
+      const opt = opts.find((o) => clean(o.innerText).toLowerCase().startsWith(w)) ?? opts.find((o) => clean(o.innerText).toLowerCase().includes(w)) ?? opts[0];
+      for (const t of ["mousedown", "mouseup", "click"]) opt.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true }));
+      return true;
+    }
+    return false;
+  }
+
+  async function perform(a, files, allowSubmit) {
     const el = registry.get(a.id);
     if (!el) return { id: a.id, ok: false, note: "Element nicht mehr da" };
     el.scrollIntoView({ block: "center" });
     try {
-      if (a.type === "fill") { setNative(el, a.value); mark(el, a.generated); }
+      if (a.type === "fill") {
+        setNative(el, a.value); mark(el, a.generated);
+        if (isCombo(el) && !(await pickSuggestion(el, a.value))) return { id: a.id, ok: true, note: "Kein Vorschlag gefunden" };
+      }
       else if (a.type === "select") {
         if (el.tagName === "SELECT") {
           const o = [...el.options].find((x) => clean(x.text) === a.option);
@@ -230,7 +267,14 @@
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg.cmd === "ping") reply({ ok: true });
     else if (msg.cmd === "snapshot") reply(snapshot());
-    else if (msg.cmd === "act") reply({ results: msg.actions.map((a) => perform(a, msg.files || {}, !!msg.allowSubmit)) });
+    else if (msg.cmd === "act") {
+      (async () => {
+        const results = [];
+        for (const a of msg.actions) results.push(await perform(a, msg.files || {}, !!msg.allowSubmit));
+        reply({ results });
+      })();
+      return true;
+    }
     else if (msg.cmd === "overlay") { show(msg); reply({ ok: true }); }
   });
 })();
